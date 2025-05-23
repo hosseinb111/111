@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en"> <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login to Messenger</title> <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5; /* Light gray background */
+            color: #1c1e21; /* Dark text */
+            transition: background-color 0.3s, color 0.3s;
+        }
+        body.dark-theme {
+            background-color: #18191a; /* Dark background */
+            color: #e4e6eb; /* Light text */
+        }
+        .container {
+            background-color: #ffffff; /* White container */
+            padding: 30px 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+            transition: background-color 0.3s;
+        }
+        body.dark-theme .container {
+            background-color: #242526; /* Darker container for dark theme */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        h2 {
+            color: #8A2BE2; /* Blue Violet header */
+            margin-bottom: 10px;
+        }
+        p.subtitle { /* Added class for better targeting */
+            color: #606770;
+            margin-bottom: 25px;
+            font-size: 0.95em;
+        }
+        body.dark-theme p.subtitle {
+            color: #b0b3b8;
+        }
+        label {
+            display: block;
+            text-align: left; /* Common for LTR languages */
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #ccd0d5;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1em;
+            background-color: #f5f6f7;
+        }
+        body.dark-theme input[type="text"] {
+            background-color: #3a3b3c;
+            border-color: #3a3b3c;
+            color: #e4e6eb;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            background-color: #8A2BE2; /* Blue Violet button */
+            color: white;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #7020b2; /* Darker Blue Violet */
+        }
+        #statusMessage {
+            margin-top: 20px;
+            font-size: 0.9em;
+            min-height: 1.2em;
+        }
+        .theme-toggle-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+        .theme-toggle-btn {
+            background-color: #e4e6eb;
+            color: #1c1e21;
+            border: 1px solid #ccd0d5;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.2em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        body.dark-theme .theme-toggle-btn {
+            background-color: #3a3b3c;
+            color: #e4e6eb;
+            border-color: #3a3b3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-toggle-container">
+        <button id="themeToggleBtn" class="theme-toggle-btn">🌙</button>
+    </div>
+
+    <div class="container">
+        <h2>Welcome!</h2> <p class="subtitle">Choose a username, then log in with Google.</p> <label for="usernameInput">Username:</label> <input type="text" id="usernameInput" placeholder="e.g., AwesomeUser123" required> <button id="googleLoginBtn">Login or Sign Up with Google</button> <p id="statusMessage"></p>
+    </div>
+
+    <script type="module">
+        import { Client, Account, Databases, ID, Permission, Role, Query } from "https://cdn.jsdelivr.net/npm/appwrite@13.0.1/dist/browser/appwrite.esm.js";
+
+        const client = new Client();
+        client
+            .setEndpoint('https://fra.cloud.appwrite.io/v1') // Your Appwrite Endpoint
+            .setProject('6830dc21001a6cbe1791');      // Your Appwrite Project ID
+
+        const account = new Account(client);
+        const databases = new Databases(client);
+
+        const USER_DATABASE_ID = '6830ef180034477d36b1';     // Your Database ID
+        const USER_PROFILE_COLLECTION_ID = '6830f5250009aa67b8f7'; // Your User Profile Collection ID
+
+        const usernameInputEl = document.getElementById('usernameInput');
+        const googleLoginBtnEl = document.getElementById('googleLoginBtn');
+        const statusMessageEl = document.getElementById('statusMessage');
+        const themeToggleBtnEl = document.getElementById('themeToggleBtn');
+
+        // --- Theme Toggle Functionality ---
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        let currentTheme = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
+
+        function applyTheme(theme) {
+            if (theme === 'dark') {
+                document.body.classList.add('dark-theme');
+                themeToggleBtnEl.textContent = '☀️'; // Sun icon for dark theme
+            } else {
+                document.body.classList.remove('dark-theme');
+                themeToggleBtnEl.textContent = '🌙'; // Moon icon for light theme
+            }
+        }
+        applyTheme(currentTheme);
+
+        themeToggleBtnEl.addEventListener('click', () => {
+            currentTheme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
+            localStorage.setItem('theme', currentTheme);
+            applyTheme(currentTheme);
+        });
+
+        // --- Appwrite Logic ---
+        googleLoginBtnEl.addEventListener('click', async () => {
+            const desiredUsername = usernameInputEl.value.trim();
+
+            if (!desiredUsername) {
+                statusMessageEl.textContent = 'Please choose a username first.'; // Translated
+                statusMessageEl.style.color = 'red';
+                return;
+            }
+
+            localStorage.setItem('pendingUsername', desiredUsername);
+            statusMessageEl.textContent = 'Redirecting to Google sign-in...'; // Translated
+            statusMessageEl.style.color = 'blue';
+
+            try {
+                const baseUrl = window.location.origin;
+                const successUrl = `${baseUrl}/chat.html`;
+                const failureUrl = `${baseUrl}/login.html?oauthError=true`;
+
+                await account.createOAuth2Session(
+                    'google',
+                    successUrl,
+                    failureUrl
+                );
+            } catch (error) {
+                console.error('Error starting Google OAuth2 login:', error);
+                statusMessageEl.textContent = 'Error starting Google login. Please try again.'; // Translated
+                statusMessageEl.style.color = 'red';
+                localStorage.removeItem('pendingUsername');
+            }
+        });
+
+        async function checkAndCreateUserProfile(appwriteUser, username) {
+            try {
+                await databases.getDocument(USER_DATABASE_ID, USER_PROFILE_COLLECTION_ID, appwriteUser.$id);
+                console.log('User profile already exists.');
+                return true;
+            } catch (error) {
+                if (error.code === 404) {
+                    console.log('User profile not found, creating new one...');
+                    try {
+                        const existingUserByUsername = await databases.listDocuments(
+                            USER_DATABASE_ID,
+                            USER_PROFILE_COLLECTION_ID,
+                            [Query.equal('username', username)]
+                        );
+                        if (existingUserByUsername.total > 0) {
+                            statusMessageEl.textContent = `Username "${username}" is already taken. Please choose another one.`; // Translated
+                            statusMessageEl.style.color = 'red';
+                            await account.deleteSession('current');
+                            localStorage.removeItem('pendingUsername');
+                            window.location.href = window.location.origin + '/login.html?usernameTaken=true';
+                            return false;
+                        }
+
+                        await databases.createDocument(
+                            USER_DATABASE_ID,
+                            USER_PROFILE_COLLECTION_ID,
+                            appwriteUser.$id,
+                            {
+                                appwriteUserId: appwriteUser.$id,
+                                username: username,
+                                email: appwriteUser.email,
+                                googleName: appwriteUser.name,
+                            },
+                            [
+                                Permission.read(Role.user(appwriteUser.$id)),
+                                Permission.update(Role.user(appwriteUser.$id)),
+                                Permission.delete(Role.user(appwriteUser.$id)),
+                                // Permission.read(Role.any()), // If profiles should be publicly readable
+                            ]
+                        );
+                        console.log('User profile created successfully.');
+                        return true;
+                    } catch (creationError) {
+                        console.error('Error creating user profile document:', creationError);
+                        statusMessageEl.textContent = `Error creating user profile: ${creationError.message}.`; // Translated
+                        statusMessageEl.style.color = 'red';
+                        return false;
+                    }
+                } else {
+                    console.error('Error checking user profile:', error);
+                    statusMessageEl.textContent = 'Error checking user profile.'; // Translated
+                    statusMessageEl.style.color = 'red';
+                    return false;
+                }
+            }
+        }
+
+        async function handleOAuthCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('oauthError')) {
+                statusMessageEl.textContent = 'Google login failed. Please try again.'; // Translated
+                statusMessageEl.style.color = 'red';
+                localStorage.removeItem('pendingUsername');
+                window.history.replaceState({}, document.title, window.location.pathname);
+                return;
+            }
+            if (urlParams.has('usernameTaken')) {
+                statusMessageEl.textContent = 'The selected username is already taken. Please try another one.'; // Translated
+                statusMessageEl.style.color = 'red';
+                localStorage.removeItem('pendingUsername');
+                window.history.replaceState({}, document.title, window.location.pathname);
+                return;
+            }
+
+            try {
+                const appwriteUser = await account.get();
+                const pendingUsername = localStorage.getItem('pendingUsername');
+
+                if (!pendingUsername) {
+                    try {
+                        await databases.getDocument(USER_DATABASE_ID, USER_PROFILE_COLLECTION_ID, appwriteUser.$id);
+                        // If user has a profile and landed here (e.g. already logged in and tried to go to login page),
+                        // and successURL in createOAuth2Session is chat.html, this might not be hit often post-OAuth.
+                        // For now, we assume if they are here and logged in without a pending username, they might be trying to access login page directly.
+                        // If successURL for OAuth is properly chat.html, this case is less critical after login.
+                    } catch (docError) {
+                        if (docError.code === 404) { // Logged in but no profile and no pending username
+                            statusMessageEl.textContent = 'Login successful, but a username was not found to complete your profile. Please try again by selecting a username.'; // Translated
+                            statusMessageEl.style.color = 'orange';
+                            await account.deleteSession('current'); // Log out to force re-entry of username
+                            localStorage.removeItem('pendingUsername');
+                        }
+                    }
+                    return;
+                }
+
+                statusMessageEl.textContent = `Google login successful (${appwriteUser.name}). Checking/creating profile...`; // Translated
+                statusMessageEl.style.color = 'green';
+
+                const profileOk = await checkAndCreateUserProfile(appwriteUser, pendingUsername);
+
+                if (profileOk) {
+                    localStorage.removeItem('pendingUsername');
+                    // Redirection to chat.html is handled by the successUrl in createOAuth2Session.
+                    // No explicit redirect here is needed if successUrl points to chat.html.
+                }
+            } catch (error) {
+                // No active session or error getting account, normal on initial page load.
+                localStorage.removeItem('pendingUsername');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', handleOAuthCallback);
+
+    </script>
+</body>
+</html>
