@@ -13,16 +13,16 @@
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            background-color: #f0f2f5; /* Light gray background */
-            color: #1c1e21; /* Dark text */
+            background-color: #f0f2f5;
+            color: #1c1e21;
             transition: background-color 0.3s, color 0.3s;
         }
         body.dark-theme {
-            background-color: #18191a; /* Dark background */
-            color: #e4e6eb; /* Light text */
+            background-color: #18191a;
+            color: #e4e6eb;
         }
         .container {
-            background-color: #ffffff; /* White container */
+            background-color: #ffffff;
             padding: 30px 40px;
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -32,11 +32,11 @@
             transition: background-color 0.3s;
         }
         body.dark-theme .container {
-            background-color: #242526; /* Darker container for dark theme */
+            background-color: #242526;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
         h2 {
-            color: #8A2BE2; /* Blue Violet header */
+            color: #8A2BE2;
             margin-bottom: 10px;
         }
         p.subtitle {
@@ -54,10 +54,14 @@
             font-weight: 600;
             font-size: 0.9em;
         }
-        input[type="text"] {
-            width: 100%;
-            padding: 12px;
+        .username-container {
+            display: flex;
+            align-items: center;
             margin-bottom: 20px;
+        }
+        input[type="text"] {
+            flex-grow: 1;
+            padding: 12px;
             border: 1px solid #ccd0d5;
             border-radius: 6px;
             box-sizing: border-box;
@@ -69,12 +73,47 @@
             border-color: #3a3b3c;
             color: #e4e6eb;
         }
+        #suggestUsernameBtn {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 10px;
+            margin-left: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        #suggestUsernameBtn:hover {
+            background-color: #5a6268;
+        }
+        #usernameSuggestions {
+            text-align: left;
+            margin-top: -10px;
+            margin-bottom: 15px;
+            font-size: 0.85em;
+        }
+        #usernameSuggestions button {
+            background-color: #e9ecef;
+            color: #495057;
+            border: 1px solid #ced4da;
+            padding: 3px 7px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        body.dark-theme #usernameSuggestions button {
+            background-color: #495057;
+            color: #e9ecef;
+            border-color: #6c757d;
+        }
         button {
             width: 100%;
             padding: 12px;
             border: none;
             border-radius: 6px;
-            background-color: #8A2BE2; /* Blue Violet button */
+            background-color: #8A2BE2;
             color: white;
             font-size: 1em;
             font-weight: bold;
@@ -82,7 +121,7 @@
             transition: background-color 0.2s;
         }
         button:hover {
-            background-color: #7020b2; /* Darker Blue Violet */
+            background-color: #7020b2;
         }
         #statusMessage {
             margin-top: 20px;
@@ -112,6 +151,19 @@
             color: #e4e6eb;
             border-color: #3a3b3c;
         }
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(0,0,0,.1);
+            border-radius: 50%;
+            border-top-color: #8A2BE2;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 5px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -124,7 +176,11 @@
         <p class="subtitle">Choose a username, then log in with Google.</p>
 
         <label for="usernameInput">Username:</label>
-        <input type="text" id="usernameInput" placeholder="e.g., AwesomeUser123" required>
+        <div class="username-container">
+            <input type="text" id="usernameInput" placeholder="e.g., AwesomeUser123" required>
+            <button id="suggestUsernameBtn" title="Suggest Usernames">✨</button>
+        </div>
+        <div id="usernameSuggestions"></div>
 
         <button id="googleLoginBtn">Login or Sign Up with Google</button>
 
@@ -132,29 +188,28 @@
     </div>
 
     <script type="module">
-        // ***** THIS IS THE CORRECTED IMPORT LINE *****
         import { Client, Account, Databases, ID, Permission, Role, Query } from "https://cdn.jsdelivr.net/npm/appwrite@13.0.1/dist/esm/appwrite.js";
 
-        const client = new Client();
-        client
-            .setEndpoint('https://fra.cloud.appwrite.io/v1') // Your Appwrite Endpoint
-            .setProject('6830dc21001a6cbe1791');      // Your Appwrite Project ID
+        const APPWRITE_ENDPOINT = 'https://fra.cloud.appwrite.io/v1';
+        const APPWRITE_PROJECT_ID = '6830dc21001a6cbe1791';
+        const USER_DATABASE_ID = '6830ef180034477d36b1';
+        const USER_PROFILE_COLLECTION_ID = '6830f5250009aa67b8f7';
 
+        const client = new Client();
+        client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
         const account = new Account(client);
         const databases = new Databases(client);
-
-        const USER_DATABASE_ID = '6830ef180034477d36b1';     // Your Database ID
-        const USER_PROFILE_COLLECTION_ID = '6830f5250009aa67b8f7'; // Your User Profile Collection ID
 
         const usernameInputEl = document.getElementById('usernameInput');
         const googleLoginBtnEl = document.getElementById('googleLoginBtn');
         const statusMessageEl = document.getElementById('statusMessage');
         const themeToggleBtnEl = document.getElementById('themeToggleBtn');
+        const suggestUsernameBtnEl = document.getElementById('suggestUsernameBtn');
+        const usernameSuggestionsEl = document.getElementById('usernameSuggestions');
 
         // --- Theme Toggle Functionality ---
         const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         let currentTheme = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
-
         function applyTheme(theme) {
             if (theme === 'dark') {
                 document.body.classList.add('dark-theme');
@@ -165,37 +220,109 @@
             }
         }
         applyTheme(currentTheme);
-
         themeToggleBtnEl.addEventListener('click', () => {
             currentTheme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
             localStorage.setItem('theme', currentTheme);
             applyTheme(currentTheme);
         });
 
-        // --- Appwrite Logic ---
+        // --- Gemini API Username Suggester ---
+        suggestUsernameBtnEl.addEventListener('click', async () => {
+            suggestUsernameBtnEl.disabled = true;
+            suggestUsernameBtnEl.innerHTML = '<div class="loading-spinner"></div>'; // Show spinner
+            usernameSuggestionsEl.innerHTML = ''; // Clear previous suggestions
+
+            const prompt = "Suggest 3 creative, unique, and short usernames for a new user on a chat application. The usernames should be fun and easy to remember. Ensure they are SFW (safe for work).";
+            const apiKey = ""; // API key is handled by the environment if using gemini-2.0-flash without specific project
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            "usernames": {
+                                type: "ARRAY",
+                                items: { type: "STRING" }
+                            }
+                        },
+                        required: ["usernames"]
+                    }
+                }
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Error from Gemini API:', errorData);
+                    statusMessageEl.textContent = 'Could not fetch username suggestions at this time.';
+                    statusMessageEl.style.color = 'orange';
+                    return;
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    
+                    const jsonText = result.candidates[0].content.parts[0].text;
+                    const parsedJson = JSON.parse(jsonText); // Parse the stringified JSON
+
+                    if (parsedJson.usernames && Array.isArray(parsedJson.usernames)) {
+                        parsedJson.usernames.forEach(username => {
+                            const btn = document.createElement('button');
+                            btn.textContent = username;
+                            btn.onclick = () => {
+                                usernameInputEl.value = username;
+                                usernameSuggestionsEl.innerHTML = ''; // Clear suggestions after selection
+                            };
+                            usernameSuggestionsEl.appendChild(btn);
+                        });
+                        if (parsedJson.usernames.length === 0) {
+                             usernameSuggestionsEl.textContent = 'No suggestions available right now.';
+                        }
+                    } else {
+                         usernameSuggestionsEl.textContent = 'Could not parse suggestions.';
+                    }
+                } else {
+                    usernameSuggestionsEl.textContent = 'No suggestions received from the AI.';
+                }
+            } catch (error) {
+                console.error('Error fetching username suggestions:', error);
+                statusMessageEl.textContent = 'Failed to get username suggestions. Please try again.';
+                statusMessageEl.style.color = 'red';
+            } finally {
+                suggestUsernameBtnEl.disabled = false;
+                suggestUsernameBtnEl.innerHTML = '✨'; // Restore button icon
+            }
+        });
+
+
+        // --- Appwrite Login Logic (existing) ---
         googleLoginBtnEl.addEventListener('click', async () => {
             const desiredUsername = usernameInputEl.value.trim();
-
             if (!desiredUsername) {
                 statusMessageEl.textContent = 'Please choose a username first.';
                 statusMessageEl.style.color = 'red';
                 return;
             }
-
             localStorage.setItem('pendingUsername', desiredUsername);
             statusMessageEl.textContent = 'Redirecting to Google sign-in...';
             statusMessageEl.style.color = 'blue';
-
             try {
                 const baseUrl = window.location.origin;
                 const successUrl = `${baseUrl}/chat.html`;
                 const failureUrl = `${baseUrl}/login.html?oauthError=true`;
-
-                await account.createOAuth2Session(
-                    'google',
-                    successUrl,
-                    failureUrl
-                );
+                await account.createOAuth2Session('google', successUrl, failureUrl);
             } catch (error) {
                 console.error('Error starting Google OAuth2 login:', error);
                 statusMessageEl.textContent = 'Error starting Google login. Please try again.';
@@ -207,11 +334,11 @@
         async function checkAndCreateUserProfile(appwriteUser, username) {
             try {
                 await databases.getDocument(USER_DATABASE_ID, USER_PROFILE_COLLECTION_ID, appwriteUser.$id);
-                console.log('User profile already exists.');
+                console.log('User profile already exists for user:', appwriteUser.$id);
                 return true;
             } catch (error) {
                 if (error.code === 404) {
-                    console.log('User profile not found, creating new one...');
+                    console.log('User profile not found for user:', appwriteUser.$id, '. Creating new one...');
                     try {
                         const existingUserByUsername = await databases.listDocuments(
                             USER_DATABASE_ID,
@@ -226,7 +353,6 @@
                             window.location.href = window.location.origin + '/login.html?usernameTaken=true';
                             return false;
                         }
-
                         await databases.createDocument(
                             USER_DATABASE_ID,
                             USER_PROFILE_COLLECTION_ID,
@@ -243,7 +369,7 @@
                                 Permission.delete(Role.user(appwriteUser.$id)),
                             ]
                         );
-                        console.log('User profile created successfully.');
+                        console.log('User profile created successfully for user:', appwriteUser.$id, 'with username:', username);
                         return true;
                     } catch (creationError) {
                         console.error('Error creating user profile document:', creationError);
@@ -252,7 +378,7 @@
                         return false;
                     }
                 } else {
-                    console.error('Error checking user profile:', error);
+                    console.error('Error checking user profile (not 404):', error);
                     statusMessageEl.textContent = 'Error checking user profile.';
                     statusMessageEl.style.color = 'red';
                     return false;
@@ -276,43 +402,35 @@
                 window.history.replaceState({}, document.title, window.location.pathname);
                 return;
             }
-
             try {
                 const appwriteUser = await account.get();
                 const pendingUsername = localStorage.getItem('pendingUsername');
-
                 if (!pendingUsername) {
-                    try {
+                    console.log('Logged in, but no pending username found. Checking for existing profile.');
+                     try {
                         await databases.getDocument(USER_DATABASE_ID, USER_PROFILE_COLLECTION_ID, appwriteUser.$id);
-                        // If user already has a profile and is logged in, no action needed here unless
-                        // successURL for OAuth was this page. If successURL is chat.html, they shouldn't land here often.
+                        console.log('User has an existing profile.');
                     } catch (docError) {
                         if (docError.code === 404) {
-                            statusMessageEl.textContent = 'Login successful, but a username was not found to complete your profile. Please try again by selecting a username.';
+                            statusMessageEl.textContent = 'Login successful, but a username was not found to complete your profile. Please log out and try again, ensuring you select a username first.';
                             statusMessageEl.style.color = 'orange';
-                            await account.deleteSession('current');
                             localStorage.removeItem('pendingUsername');
                         }
                     }
-                    return; // No pending username to process.
+                    return;
                 }
-
                 statusMessageEl.textContent = `Google login successful (${appwriteUser.name}). Checking/creating profile...`;
                 statusMessageEl.style.color = 'green';
-
                 const profileOk = await checkAndCreateUserProfile(appwriteUser, pendingUsername);
-
                 if (profileOk) {
                     localStorage.removeItem('pendingUsername');
-                    // Redirection to chat.html is handled by the successUrl in createOAuth2Session.
+                    console.log("Profile check/creation successful. User should be redirected to chat.html by OAuth successUrl.");
                 }
             } catch (error) {
                 localStorage.removeItem('pendingUsername');
             }
         }
-
         window.addEventListener('DOMContentLoaded', handleOAuthCallback);
-
     </script>
 </body>
 </html>
