@@ -82,9 +82,18 @@
             border-radius: 6px;
             cursor: pointer;
             font-size: 0.9em;
+            display: flex; /* For spinner alignment */
+            align-items: center; /* For spinner alignment */
+            justify-content: center; /* For spinner alignment */
+            min-width: 36px; /* Ensure button doesn't shrink too much with spinner */
+            min-height: 36px;
         }
         #suggestUsernameBtn:hover {
             background-color: #5a6268;
+        }
+        #suggestUsernameBtn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
         }
         #usernameSuggestions {
             text-align: left;
@@ -108,7 +117,7 @@
             color: #e9ecef;
             border-color: #6c757d;
         }
-        button {
+        button#googleLoginBtn { /* More specific selector for the main button */
             width: 100%;
             padding: 12px;
             border: none;
@@ -120,7 +129,7 @@
             cursor: pointer;
             transition: background-color 0.2s;
         }
-        button:hover {
+        button#googleLoginBtn:hover {
             background-color: #7020b2;
         }
         #statusMessage {
@@ -155,11 +164,11 @@
             display: inline-block;
             width: 16px;
             height: 16px;
-            border: 2px solid rgba(0,0,0,.1);
+            border: 2px solid rgba(255,255,255,.3); /* Adjusted for visibility on dark button */
             border-radius: 50%;
-            border-top-color: #8A2BE2;
+            border-top-color: #ffffff; /* Adjusted for visibility on dark button */
             animation: spin 1s ease-in-out infinite;
-            margin-left: 5px;
+            /* margin-left: 5px; No need if button is flex centered */
         }
         @keyframes spin {
             to { transform: rotate(360deg); }
@@ -188,18 +197,47 @@
     </div>
 
     <script type="module">
+        // IMPORTANT: If the Appwrite SDK fails to load from the CDN (e.g., due to network issues or regional filtering),
+        // download the appwrite.js file (ESM version) from an official source (like npm or GitHub releases for Appwrite)
+        // and host it locally with your project. Then, change the import path below to point to your local file.
+        // Example: import { Client, ... } from './js/appwrite.js';
         import { Client, Account, Databases, ID, Permission, Role, Query } from "https://cdn.jsdelivr.net/npm/appwrite@13.0.1/dist/esm/appwrite.js";
 
+        // --- Appwrite Client Configuration ---
         const APPWRITE_ENDPOINT = 'https://fra.cloud.appwrite.io/v1';
         const APPWRITE_PROJECT_ID = '6830dc21001a6cbe1791';
+
+        // --- Appwrite Database and Collection Configuration ---
         const USER_DATABASE_ID = '6830ef180034477d36b1';
         const USER_PROFILE_COLLECTION_ID = '6830f5250009aa67b8f7';
 
-        const client = new Client();
-        client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
-        const account = new Account(client);
-        const databases = new Databases(client);
+        // --- Initialize Appwrite SDK ---
+        let client, account, databases;
+        try {
+            client = new Client();
+            client
+                .setEndpoint(APPWRITE_ENDPOINT)
+                .setProject(APPWRITE_PROJECT_ID);
 
+            account = new Account(client);
+            databases = new Databases(client);
+            console.log("Appwrite SDK initialized successfully.");
+        } catch (sdkError) {
+            console.error("Failed to initialize Appwrite SDK:", sdkError);
+            const statusMsgElForSdk = document.getElementById('statusMessage');
+            if (statusMsgElForSdk) {
+                statusMsgElForSdk.textContent = "Error: Could not load essential application components. Please check your internet connection or try again later.";
+                statusMsgElForSdk.style.color = "red";
+            }
+            // Disable Appwrite-dependent buttons if SDK fails
+            const googleBtn = document.getElementById('googleLoginBtn');
+            if(googleBtn) googleBtn.disabled = true;
+            const suggestBtn = document.getElementById('suggestUsernameBtn');
+            if(suggestBtn) suggestBtn.disabled = true;
+        }
+
+
+        // --- DOM Elements ---
         const usernameInputEl = document.getElementById('usernameInput');
         const googleLoginBtnEl = document.getElementById('googleLoginBtn');
         const statusMessageEl = document.getElementById('statusMessage');
@@ -209,129 +247,178 @@
 
         // --- Theme Toggle Functionality ---
         const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        let currentTheme = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
+        let currentTheme = localStorage.getItem('theme'); // Get theme from localStorage
+        if (currentTheme === null) { // If no theme in localStorage, use system preference
+            currentTheme = prefersDark ? 'dark' : 'light';
+        }
+
         function applyTheme(theme) {
+            console.log("Applying theme:", theme);
             if (theme === 'dark') {
                 document.body.classList.add('dark-theme');
-                themeToggleBtnEl.textContent = '☀️';
+                themeToggleBtnEl.textContent = '☀️'; // Sun icon
             } else {
                 document.body.classList.remove('dark-theme');
-                themeToggleBtnEl.textContent = '🌙';
+                themeToggleBtnEl.textContent = '🌙'; // Moon icon
             }
         }
-        applyTheme(currentTheme);
-        themeToggleBtnEl.addEventListener('click', () => {
-            currentTheme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
-            localStorage.setItem('theme', currentTheme);
-            applyTheme(currentTheme);
-        });
+        applyTheme(currentTheme); // Apply initial theme
+
+        if (themeToggleBtnEl) {
+            themeToggleBtnEl.addEventListener('click', () => {
+                console.log("Theme toggle clicked. Current body classes:", document.body.classList);
+                currentTheme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
+                localStorage.setItem('theme', currentTheme);
+                applyTheme(currentTheme);
+                console.log("New theme set:", currentTheme);
+            });
+        } else {
+            console.error("Theme toggle button not found.");
+        }
+
 
         // --- Gemini API Username Suggester ---
-        suggestUsernameBtnEl.addEventListener('click', async () => {
-            suggestUsernameBtnEl.disabled = true;
-            suggestUsernameBtnEl.innerHTML = '<div class="loading-spinner"></div>'; // Show spinner
-            usernameSuggestionsEl.innerHTML = ''; // Clear previous suggestions
+        if (suggestUsernameBtnEl) {
+            suggestUsernameBtnEl.addEventListener('click', async () => {
+                console.log("Suggest username button clicked.");
+                suggestUsernameBtnEl.disabled = true;
+                suggestUsernameBtnEl.innerHTML = '<div class="loading-spinner"></div>';
+                usernameSuggestionsEl.innerHTML = '';
+                statusMessageEl.textContent = ''; // Clear previous status
 
-            const prompt = "Suggest 3 creative, unique, and short usernames for a new user on a chat application. The usernames should be fun and easy to remember. Ensure they are SFW (safe for work).";
-            const apiKey = ""; // API key is handled by the environment if using gemini-2.0-flash without specific project
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-            
-            const payload = {
-                contents: [{ role: "user", parts: [{ text: prompt }] }],
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "OBJECT",
-                        properties: {
-                            "usernames": {
-                                type: "ARRAY",
-                                items: { type: "STRING" }
-                            }
+                const prompt = "Suggest 3 creative, unique, and short usernames for a new user on a chat application. The usernames should be fun and easy to remember. Ensure they are SFW (safe for work) and contain no spaces or special characters other than underscores or numbers.";
+                const apiKey = ""; // API key is handled by the environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                "usernames": {
+                                    type: "ARRAY",
+                                    items: { 
+                                        type: "STRING",
+                                        description: "A single suggested username, alphanumeric with underscores allowed."
+                                    }
+                                }
+                            },
+                            required: ["usernames"]
                         },
-                        required: ["usernames"]
+                        // Added safety settings for cleaner suggestions
+                        safetySettings: [
+                            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+                        ],
+                        temperature: 0.7 // For a bit more creativity
                     }
-                }
-            };
+                };
+                console.log("Sending request to Gemini API with payload:", JSON.stringify(payload));
 
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    console.log("Gemini API response status:", response.status);
 
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    console.error('Error from Gemini API:', errorData);
-                    statusMessageEl.textContent = 'Could not fetch username suggestions at this time.';
-                    statusMessageEl.style.color = 'orange';
-                    return;
-                }
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => response.text()); // Catch if errorData is not JSON
+                        console.error('Error from Gemini API:', errorData);
+                        statusMessageEl.textContent = `Could not fetch suggestions (Status: ${response.status}).`;
+                        statusMessageEl.style.color = 'orange';
+                        return;
+                    }
 
-                const result = await response.json();
+                    const result = await response.json();
+                    console.log("Gemini API result:", JSON.stringify(result, null, 2));
 
-                if (result.candidates && result.candidates.length > 0 &&
-                    result.candidates[0].content && result.candidates[0].content.parts &&
-                    result.candidates[0].content.parts.length > 0) {
-                    
-                    const jsonText = result.candidates[0].content.parts[0].text;
-                    const parsedJson = JSON.parse(jsonText); // Parse the stringified JSON
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        
+                        const jsonText = result.candidates[0].content.parts[0].text;
+                        console.log("Raw JSON text from Gemini:", jsonText);
+                        const parsedJson = JSON.parse(jsonText);
 
-                    if (parsedJson.usernames && Array.isArray(parsedJson.usernames)) {
-                        parsedJson.usernames.forEach(username => {
-                            const btn = document.createElement('button');
-                            btn.textContent = username;
-                            btn.onclick = () => {
-                                usernameInputEl.value = username;
-                                usernameSuggestionsEl.innerHTML = ''; // Clear suggestions after selection
-                            };
-                            usernameSuggestionsEl.appendChild(btn);
-                        });
-                        if (parsedJson.usernames.length === 0) {
-                             usernameSuggestionsEl.textContent = 'No suggestions available right now.';
+                        if (parsedJson.usernames && Array.isArray(parsedJson.usernames)) {
+                            if (parsedJson.usernames.length === 0) {
+                                usernameSuggestionsEl.textContent = 'No suggestions available from AI right now.';
+                            } else {
+                                parsedJson.usernames.forEach(username => {
+                                    const btn = document.createElement('button');
+                                    btn.textContent = username;
+                                    btn.onclick = () => {
+                                        usernameInputEl.value = username;
+                                        usernameSuggestionsEl.innerHTML = '';
+                                    };
+                                    usernameSuggestionsEl.appendChild(btn);
+                                });
+                            }
+                        } else {
+                             usernameSuggestionsEl.textContent = 'Could not parse suggestions from AI response.';
+                             console.warn("Parsed JSON from Gemini doesn't contain 'usernames' array:", parsedJson);
                         }
                     } else {
-                         usernameSuggestionsEl.textContent = 'Could not parse suggestions.';
+                        usernameSuggestionsEl.textContent = 'No valid suggestions received from the AI.';
+                        console.warn("Unexpected response structure from Gemini:", result);
                     }
-                } else {
-                    usernameSuggestionsEl.textContent = 'No suggestions received from the AI.';
+                } catch (error) {
+                    console.error('Error fetching/processing username suggestions:', error);
+                    statusMessageEl.textContent = 'Failed to get username suggestions. Check console for details.';
+                    statusMessageEl.style.color = 'red';
+                } finally {
+                    suggestUsernameBtnEl.disabled = false;
+                    suggestUsernameBtnEl.innerHTML = '✨';
                 }
-            } catch (error) {
-                console.error('Error fetching username suggestions:', error);
-                statusMessageEl.textContent = 'Failed to get username suggestions. Please try again.';
-                statusMessageEl.style.color = 'red';
-            } finally {
-                suggestUsernameBtnEl.disabled = false;
-                suggestUsernameBtnEl.innerHTML = '✨'; // Restore button icon
-            }
-        });
+            });
+        } else {
+            console.error("Suggest username button not found.");
+        }
 
 
-        // --- Appwrite Login Logic (existing) ---
-        googleLoginBtnEl.addEventListener('click', async () => {
-            const desiredUsername = usernameInputEl.value.trim();
-            if (!desiredUsername) {
-                statusMessageEl.textContent = 'Please choose a username first.';
-                statusMessageEl.style.color = 'red';
-                return;
-            }
-            localStorage.setItem('pendingUsername', desiredUsername);
-            statusMessageEl.textContent = 'Redirecting to Google sign-in...';
-            statusMessageEl.style.color = 'blue';
-            try {
-                const baseUrl = window.location.origin;
-                const successUrl = `${baseUrl}/chat.html`;
-                const failureUrl = `${baseUrl}/login.html?oauthError=true`;
-                await account.createOAuth2Session('google', successUrl, failureUrl);
-            } catch (error) {
-                console.error('Error starting Google OAuth2 login:', error);
-                statusMessageEl.textContent = 'Error starting Google login. Please try again.';
-                statusMessageEl.style.color = 'red';
-                localStorage.removeItem('pendingUsername');
-            }
-        });
+        // --- Appwrite Login Logic (existing, ensure Appwrite SDK is loaded) ---
+        if (googleLoginBtnEl && account && databases) { // Check if Appwrite SDK objects are available
+            googleLoginBtnEl.addEventListener('click', async () => {
+                const desiredUsername = usernameInputEl.value.trim();
+                if (!desiredUsername) {
+                    statusMessageEl.textContent = 'Please choose a username first.';
+                    statusMessageEl.style.color = 'red';
+                    return;
+                }
+                localStorage.setItem('pendingUsername', desiredUsername);
+                statusMessageEl.textContent = 'Redirecting to Google sign-in...';
+                statusMessageEl.style.color = 'blue';
+                try {
+                    const baseUrl = window.location.origin;
+                    const successUrl = `${baseUrl}/chat.html`;
+                    const failureUrl = `${baseUrl}/login.html?oauthError=true`;
+                    await account.createOAuth2Session('google', successUrl, failureUrl);
+                } catch (error) {
+                    console.error('Error starting Google OAuth2 login:', error);
+                    statusMessageEl.textContent = 'Error starting Google login. Please try again.';
+                    statusMessageEl.style.color = 'red';
+                    localStorage.removeItem('pendingUsername');
+                }
+            });
+        } else {
+            console.error("Google login button or Appwrite SDK not available for login logic.");
+            if(googleLoginBtnEl) googleLoginBtnEl.disabled = true; // Disable if SDK failed
+        }
+
 
         async function checkAndCreateUserProfile(appwriteUser, username) {
+            if (!databases) { // Guard clause if SDK failed
+                console.error("Databases service not initialized. Cannot check/create profile.");
+                statusMessageEl.textContent = "Application error: Database service unavailable.";
+                statusMessageEl.style.color = "red";
+                return false;
+            }
             try {
                 await databases.getDocument(USER_DATABASE_ID, USER_PROFILE_COLLECTION_ID, appwriteUser.$id);
                 console.log('User profile already exists for user:', appwriteUser.$id);
@@ -348,7 +435,7 @@
                         if (existingUserByUsername.total > 0) {
                             statusMessageEl.textContent = `Username "${username}" is already taken. Please choose another one.`;
                             statusMessageEl.style.color = 'red';
-                            await account.deleteSession('current');
+                            if(account) await account.deleteSession('current').catch(e => console.warn("Failed to delete session on username taken:", e));
                             localStorage.removeItem('pendingUsername');
                             window.location.href = window.location.origin + '/login.html?usernameTaken=true';
                             return false;
@@ -387,6 +474,10 @@
         }
 
         async function handleOAuthCallback() {
+            if (!account || !databases) { // Guard clause if SDK failed
+                 console.warn("Appwrite SDK not initialized. OAuth callback cannot be processed.");
+                 return;
+            }
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('oauthError')) {
                 statusMessageEl.textContent = 'Google login failed. Please try again.';
@@ -427,10 +518,24 @@
                     console.log("Profile check/creation successful. User should be redirected to chat.html by OAuth successUrl.");
                 }
             } catch (error) {
-                localStorage.removeItem('pendingUsername');
+                // This catch block is for account.get() failing, meaning user is not logged in.
+                // console.log('No active Appwrite session found on page load, or error getting account.');
+                localStorage.removeItem('pendingUsername'); // Clean up any stale data
             }
         }
-        window.addEventListener('DOMContentLoaded', handleOAuthCallback);
+        
+        // Run the OAuth callback handler when the DOM is fully loaded
+        // Ensure Appwrite SDK objects are available before calling Appwrite-dependent functions
+        if (typeof Client !== 'undefined') { // A basic check if Appwrite SDK might have loaded
+            window.addEventListener('DOMContentLoaded', handleOAuthCallback);
+        } else {
+            console.error("Appwrite SDK not loaded. App functionality will be limited.");
+            if(statusMessageEl) {
+                 statusMessageEl.textContent = "Critical Error: Application components failed to load. Check your internet connection.";
+                 statusMessageEl.style.color = "red";
+            }
+        }
+
     </script>
 </body>
 </html>
