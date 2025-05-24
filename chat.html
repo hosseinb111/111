@@ -1,10 +1,305 @@
-// --- Appwrite User Session Check ---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Messenger</title>
+    <style>
+        /* Your existing CSS styles - remain unchanged */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #1c1e21;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        body.dark-theme {
+            background-color: #18191a;
+            color: #e4e6eb;
+        }
+        .theme-toggle-container {
+            position: fixed; 
+            top: 15px;
+            right: 15px;
+            z-index: 1000;
+        }
+        .theme-toggle-btn {
+            background-color: #e4e6eb;
+            color: #1c1e21;
+            border: 1px solid #ccd0d5;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.2em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        body.dark-theme .theme-toggle-btn {
+            background-color: #3a3b3c;
+            color: #e4e6eb;
+            border-color: #3a3b3c;
+        }
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        h1 {
+            color: #8A2BE2;
+            text-align: center;
+            margin-top: 60px; 
+            margin-bottom: 20px;
+        }
+        #chat-area {
+            flex-grow: 1;
+            border: 1px solid #ccd0d5;
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+            background-color: #ffffff;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column-reverse; 
+        }
+        body.dark-theme #chat-area {
+            background-color: #242526;
+            border-color: #3a3b3c;
+        }
+        .message {
+            margin-bottom: 12px;
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 70%;
+            word-break: break-word;
+            display: flex; 
+            flex-direction: column; 
+        }
+        .message.sent {
+            background-color: #8A2BE2; 
+            color: white;
+            margin-left: auto; 
+            border-bottom-right-radius: 5px;
+            align-items: flex-end; 
+        }
+        .message.received {
+            background-color: #e4e6eb; 
+            color: #050505;
+            margin-right: auto; 
+            border-bottom-left-radius: 5px;
+            align-items: flex-start; 
+        }
+        body.dark-theme .message.received {
+            background-color: #3a3b3c;
+            color: #e4e6eb;
+        }
+        .message .sender {
+            font-weight: bold;
+            font-size: 0.85em;
+            margin-bottom: 4px;
+        }
+        .message.sent .sender {
+             color: rgba(255, 255, 255, 0.8);
+        }
+        .message.received .sender {
+            color: #606770;
+        }
+        body.dark-theme .message.received .sender {
+            color: #b0b3b8;
+        }
+        body.dark-theme .message.sent .sender {
+            color: rgba(228, 230, 235, 0.8);
+        }
+         .message .message-text { 
+            /* Main text styling if needed */
+        }
+        .message .timestamp {
+            font-size: 0.75em;
+            margin-top: 5px;
+        }
+         .message.sent .timestamp {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .message.received .timestamp {
+             color: #606770;
+        }
+        body.dark-theme .message.received .timestamp {
+            color: #a0a3a8;
+        }
+        body.dark-theme .message.sent .timestamp {
+            color: rgba(228, 230, 235, 0.7);
+        }
+        #input-area {
+            display: flex;
+            margin-top: 10px; 
+        }
+        #message-input {
+            flex-grow: 1;
+            padding: 12px;
+            border: 1px solid #ccd0d5;
+            border-radius: 20px;
+            margin-right: 10px;
+            font-size: 1em;
+            background-color: #ffffff;
+        }
+        body.dark-theme #message-input {
+            background-color: #3a3b3c;
+            border-color: #3a3b3c;
+            color: #e4e6eb;
+        }
+        #send-button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 20px;
+            background-color: #8A2BE2;
+            color: white;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #send-button:hover {
+            background-color: #7020b2;
+        }
+        #send-button:disabled { 
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        body.dark-theme #send-button:disabled {
+            background-color: #555;
+        }
+        #loading-messages {
+            text-align: center;
+            padding: 20px;
+            color: #606770;
+        }
+        body.dark-theme #loading-messages {
+            color: #b0b3b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-toggle-container">
+        <button id="themeToggleBtn" class="theme-toggle-btn">🌙</button>
+    </div>
+
+    <div class="chat-container">
+        <h1>Firebase Messenger</h1>
+        <p id="welcomeMessage" style="text-align: center; margin-bottom: 15px;">Initializing...</p>
+
+        <div id="chat-area">
+            <div id="loading-messages">Loading messages...</div>
+        </div>
+
+        <form id="send-form">
+            <div id="input-area">
+                <input type="text" id="message-input" placeholder="Type your message..." autocomplete="off" disabled>
+                <button type="submit" id="send-button" disabled>Send</button>
+            </div>
+        </form>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/appwrite@18.1.1/dist/iife/sdk.min.js"></script>
+
+    <script type="module">
+        // --- Initialize Appwrite (for Auth & User Profile) ---
+        let appwriteClient, appwriteAccount, appwriteDatabases;
+        if (typeof window.Appwrite !== 'undefined') {
+            const { Client, Account, Databases: AppwriteDB } = window.Appwrite;
+            appwriteClient = new Client();
+            appwriteClient
+                .setEndpoint('https://fra.cloud.appwrite.io/v1') 
+                .setProject('6830dc21001a6cbe1791');    
+            appwriteAccount = new Account(appwriteClient);
+            appwriteDatabases = new AppwriteDB(appwriteClient);
+            console.log("Appwrite SDK (for Auth/Profile) initialized.");
+        } else {
+            console.error("Appwrite SDK (IIFE version) FAILED to load.");
+            document.getElementById('welcomeMessage').textContent = "Error: Critical Auth components failed to load.";
+        }
+        
+        const USER_DATABASE_ID_APPWRITE = '6830ef180034477d36b1';
+        const USER_PROFILE_COLLECTION_ID_APPWRITE = '6830f5250009aa67b8f7';
+
+        // --- Initialize Firebase (for Chat Messages) ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, query, limitToLast, orderByChild, serverTimestamp, get, startAt } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDMU9MsmNr0OfKDVB0Hyb8KYZElD-NPiC0",
+            authDomain: "chatapp-e21b7.firebaseapp.com",
+            databaseURL: "https://chatapp-e21b7-default-rtdb.firebaseio.com",
+            projectId: "chatapp-e21b7",
+            storageBucket: "chatapp-e21b7.firebasestorage.app",
+            messagingSenderId: "56407109760",
+            appId: "1:56407109760:web:08df47c54221dc4dabf665",
+            measurementId: "G-Q5G798ZVT6"
+        };
+
+        let firebaseApp, firebaseDb;
+        try {
+            firebaseApp = initializeApp(firebaseConfig);
+            firebaseDb = getDatabase(firebaseApp);
+            console.log("Firebase SDK (for Messages) initialized successfully.");
+        } catch (e) {
+            console.error("Firebase initialization FAILED:", e);
+            document.getElementById('welcomeMessage').textContent = "Error: Chat message system failed to load.";
+        }
+
+        // --- DOM Elements ---
+        const chatArea = document.getElementById('chat-area');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const sendForm = document.getElementById('send-form');
+        const welcomeMessageEl = document.getElementById('welcomeMessage');
+        const loadingMessagesEl = document.getElementById('loading-messages');
+        const themeToggleBtnEl = document.getElementById('themeToggleBtn');
+
+        let currentUserAppwrite = null; 
+        let currentUserProfileAppwrite = null; 
+        let lastMessageTimestamp = 0; 
+
+        // --- Theme Toggle Functionality ---
+        if (themeToggleBtnEl) {
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            let currentTheme = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
+
+            function applyTheme(theme) {
+                if (theme === 'dark') {
+                    document.body.classList.add('dark-theme');
+                    themeToggleBtnEl.textContent = '☀️';
+                } else {
+                    document.body.classList.remove('dark-theme');
+                    themeToggleBtnEl.textContent = '🌙';
+                }
+            }
+            applyTheme(currentTheme); 
+
+            themeToggleBtnEl.addEventListener('click', () => {
+                currentTheme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
+                localStorage.setItem('theme', currentTheme);
+                applyTheme(currentTheme);
+            });
+        } else {
+            console.warn("Theme toggle button not found in the DOM.");
+        }
+
+        // --- Appwrite User Session Check ---
         async function checkUserSessionAppwrite() {
             console.log("Checking Appwrite user session...");
             if (!appwriteAccount || !appwriteDatabases) {
                 console.error("Appwrite services not available for session check. Redirecting to login page.");
                 if(welcomeMessageEl) welcomeMessageEl.textContent = "Appwrite connection error. Redirecting...";
-                // MODIFIED: Redirect to index.html
+                // *** MODIFIED: Redirect to index.html ***
                 window.location.href = window.location.origin + '/index.html'; 
                 return;
             }
@@ -23,7 +318,7 @@
                     if (!currentUserProfileAppwrite.username) {
                         console.error("Appwrite user profile does not contain a username. Redirecting to login page.");
                         if(welcomeMessageEl) welcomeMessageEl.textContent = `Profile error for ${currentUserAppwrite.name}. Redirecting...`;
-                        // MODIFIED: Redirect to index.html with error parameter
+                        // *** MODIFIED: Redirect to index.html with error parameter ***
                         window.location.href = window.location.origin + '/index.html?error=profile_incomplete';
                         return;
                     }
@@ -31,7 +326,7 @@
                     if (welcomeMessageEl) welcomeMessageEl.textContent = `Logged in as: ${currentUserProfileAppwrite.username}`;
                     
                     messageInput.disabled = false;
-                    sendButton.disabled = false; // Assuming sendButton is your actual send button ID
+                    sendButton.disabled = false; 
                     
                     if (firebaseDb) {
                         loadInitialMessagesFirebase();
@@ -44,7 +339,7 @@
                 } catch (profileError) {
                     console.error("Failed to fetch Appwrite user profile:", profileError);
                     if(welcomeMessageEl) welcomeMessageEl.textContent = `Error fetching profile for ${currentUserAppwrite.name}. Redirecting...`;
-                    // MODIFIED: Redirect to index.html with error parameter
+                    // *** MODIFIED: Redirect to index.html with error parameter ***
                     window.location.href = window.location.origin + '/index.html?error=profile_missing';
                     return;
                 }
@@ -52,7 +347,154 @@
             } catch (sessionError) {
                 console.log("Appwrite: No active user session found. Redirecting to login page.", sessionError);
                 if(welcomeMessageEl) welcomeMessageEl.textContent = "Not logged in. Redirecting...";
-                // MODIFIED: Redirect to index.html
+                // *** MODIFIED: Redirect to index.html ***
                 window.location.href = window.location.origin + '/index.html'; 
             }
         }
+
+        // --- Firebase Message Functions ---
+        function displayMessageFirebase(messageData, messageId, isAppendingForHistory = false) {
+            if (loadingMessagesEl && loadingMessagesEl.style.display !== 'none') {
+                loadingMessagesEl.style.display = 'none';
+            }
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.classList.add(messageData.senderUserId === currentUserAppwrite?.$id ? 'sent' : 'received');
+            messageDiv.dataset.id = messageId;
+
+            const senderSpan = document.createElement('span');
+            senderSpan.classList.add('sender');
+            senderSpan.textContent = messageData.senderUsername || 'Unknown';
+
+            const textSpan = document.createElement('span');
+            textSpan.classList.add('message-text');
+            textSpan.textContent = messageData.text;
+
+            const timestampSpan = document.createElement('span');
+            timestampSpan.classList.add('timestamp');
+            timestampSpan.textContent = messageData.timestamp ? new Date(messageData.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            
+            messageDiv.appendChild(senderSpan);
+            messageDiv.appendChild(textSpan);
+            messageDiv.appendChild(timestampSpan);
+
+            if (isAppendingForHistory) {
+                chatArea.appendChild(messageDiv); 
+            } else {
+                chatArea.insertBefore(messageDiv, chatArea.firstChild); 
+            }
+            
+            if (!isAppendingForHistory) { 
+                chatArea.scrollTop = 0; 
+            }
+        }
+
+        async function loadInitialMessagesFirebase() {
+            if (!firebaseDb || !currentUserAppwrite) return; 
+            const messagesRef = ref(firebaseDb, 'messages');
+            const messagesQuery = query(messagesRef, orderByChild('timestamp'), limitToLast(25));
+            
+            try {
+                const snapshot = await get(messagesQuery);
+                if (chatArea.contains(loadingMessagesEl)) {
+                     chatArea.removeChild(loadingMessagesEl);
+                }
+                let messagesFound = false;
+                if (snapshot.exists()) {
+                    const messages = [];
+                    snapshot.forEach(childSnapshot => {
+                        messages.push({ id: childSnapshot.key, ...childSnapshot.val() });
+                        messagesFound = true;
+                    });
+                    messages.forEach(msg => displayMessageFirebase(msg, msg.id, true)); 
+                    if (messages.length > 0) {
+                        lastMessageTimestamp = messages[messages.length - 1].timestamp;
+                    }
+                }
+                if(!messagesFound) {
+                    const noMsgDiv = document.createElement('div');
+                    noMsgDiv.id = 'loading-messages'; 
+                    noMsgDiv.textContent = 'No messages yet. Start the conversation!';
+                    chatArea.appendChild(noMsgDiv);
+                } else {
+                     chatArea.scrollTop = chatArea.scrollHeight;
+                }
+            } catch (error) {
+                console.error("Error loading initial messages from Firebase:", error);
+                if(loadingMessagesEl && chatArea.contains(loadingMessagesEl)) {
+                    loadingMessagesEl.textContent = 'Failed to load messages.';
+                } else if (!chatArea.contains(loadingMessagesEl) && chatArea) { // Check if chatArea is not null
+                    const errorMsgDiv = document.createElement('div');
+                    errorMsgDiv.textContent = 'Failed to load messages.';
+                    errorMsgDiv.style.textAlign = 'center';
+                    chatArea.appendChild(errorMsgDiv);
+                }
+            }
+        }
+
+        async function sendMessageFirebase(event) {
+            if(event) event.preventDefault();
+            if (!firebaseDb) {
+                alert("Chat message system not available.");
+                return;
+            }
+            const messageText = messageInput.value.trim();
+
+            if (!messageText || !currentUserAppwrite || !currentUserProfileAppwrite || !currentUserProfileAppwrite.username) {
+                console.error("Cannot send message: No text, or Appwrite user/profile/username missing.");
+                alert("Your session or profile information is incomplete. Please try refreshing or logging in again.");
+                return;
+            }
+
+            const messagesRef = ref(firebaseDb, 'messages');
+            try {
+                await push(messagesRef, {
+                    text: messageText,
+                    senderUserId: currentUserAppwrite.$id, 
+                    senderUsername: currentUserProfileAppwrite.username, 
+                    timestamp: serverTimestamp() 
+                });
+                messageInput.value = ''; 
+            } catch (error) {
+                console.error("Error sending message to Firebase:", error);
+                alert("Failed to send message. Error: " + error.message);
+            }
+        }
+
+        function subscribeToMessagesFirebase() {
+            if (!firebaseDb || !currentUserAppwrite) return; 
+            const messagesRef = ref(firebaseDb, 'messages');
+            const messagesQuery = query(messagesRef, orderByChild('timestamp'), startAt(lastMessageTimestamp + 1));
+
+            onChildAdded(messagesQuery, (snapshot) => {
+                const newMessage = snapshot.val();
+                const messageId = snapshot.key;
+                if (!document.querySelector(`.message[data-id="${messageId}"]`)) {
+                    displayMessageFirebase(newMessage, messageId, false);
+                }
+                lastMessageTimestamp = newMessage.timestamp; 
+            });
+            console.log("Subscribed to real-time Firebase message updates.");
+        }
+        
+        // --- Event Listeners & Initialization ---
+        if (sendForm && sendButton) { 
+             sendForm.addEventListener('submit', sendMessageFirebase);
+        } else {
+            console.warn("Send form or button not found.");
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (appwriteClient && firebaseApp) { 
+                checkUserSessionAppwrite(); 
+            } else {
+                console.error("One or both SDKs (Appwrite/Firebase) FAILED to initialize before DOMContentLoaded.");
+                if(welcomeMessageEl) welcomeMessageEl.textContent = "Chat application critical components failed to load.";
+                if(messageInput) messageInput.disabled = true;
+                if(sendButton) sendButton.disabled = true;
+            }
+        });
+
+    </script>
+</body>
+</html>
