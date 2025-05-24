@@ -1,8 +1,10 @@
 <!DOCTYPE html>
-<html lang="en"> <head>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login to Messenger</title> <style>
+    <title>Login to Messenger</title>
+    <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             display: flex;
@@ -37,7 +39,7 @@
             color: #8A2BE2; /* Blue Violet header */
             margin-bottom: 10px;
         }
-        p.subtitle { /* Added class for better targeting */
+        p.subtitle {
             color: #606770;
             margin-bottom: 25px;
             font-size: 0.95em;
@@ -47,7 +49,7 @@
         }
         label {
             display: block;
-            text-align: left; /* Common for LTR languages */
+            text-align: left;
             margin-bottom: 8px;
             font-weight: 600;
             font-size: 0.9em;
@@ -118,11 +120,20 @@
     </div>
 
     <div class="container">
-        <h2>Welcome!</h2> <p class="subtitle">Choose a username, then log in with Google.</p> <label for="usernameInput">Username:</label> <input type="text" id="usernameInput" placeholder="e.g., AwesomeUser123" required> <button id="googleLoginBtn">Login or Sign Up with Google</button> <p id="statusMessage"></p>
+        <h2>Welcome!</h2>
+        <p class="subtitle">Choose a username, then log in with Google.</p>
+
+        <label for="usernameInput">Username:</label>
+        <input type="text" id="usernameInput" placeholder="e.g., AwesomeUser123" required>
+
+        <button id="googleLoginBtn">Login or Sign Up with Google</button>
+
+        <p id="statusMessage"></p>
     </div>
 
     <script type="module">
-        import { Client, Account, Databases, ID, Permission, Role, Query } from "https://cdn.jsdelivr.net/npm/appwrite@13.0.1/dist/browser/appwrite.esm.js";
+        // ***** THIS IS THE CORRECTED IMPORT LINE *****
+        import { Client, Account, Databases, ID, Permission, Role, Query } from "https://cdn.jsdelivr.net/npm/appwrite@13.0.1/dist/esm/appwrite.js";
 
         const client = new Client();
         client
@@ -147,10 +158,10 @@
         function applyTheme(theme) {
             if (theme === 'dark') {
                 document.body.classList.add('dark-theme');
-                themeToggleBtnEl.textContent = '☀️'; // Sun icon for dark theme
+                themeToggleBtnEl.textContent = '☀️';
             } else {
                 document.body.classList.remove('dark-theme');
-                themeToggleBtnEl.textContent = '🌙'; // Moon icon for light theme
+                themeToggleBtnEl.textContent = '🌙';
             }
         }
         applyTheme(currentTheme);
@@ -166,13 +177,13 @@
             const desiredUsername = usernameInputEl.value.trim();
 
             if (!desiredUsername) {
-                statusMessageEl.textContent = 'Please choose a username first.'; // Translated
+                statusMessageEl.textContent = 'Please choose a username first.';
                 statusMessageEl.style.color = 'red';
                 return;
             }
 
             localStorage.setItem('pendingUsername', desiredUsername);
-            statusMessageEl.textContent = 'Redirecting to Google sign-in...'; // Translated
+            statusMessageEl.textContent = 'Redirecting to Google sign-in...';
             statusMessageEl.style.color = 'blue';
 
             try {
@@ -187,7 +198,7 @@
                 );
             } catch (error) {
                 console.error('Error starting Google OAuth2 login:', error);
-                statusMessageEl.textContent = 'Error starting Google login. Please try again.'; // Translated
+                statusMessageEl.textContent = 'Error starting Google login. Please try again.';
                 statusMessageEl.style.color = 'red';
                 localStorage.removeItem('pendingUsername');
             }
@@ -208,7 +219,7 @@
                             [Query.equal('username', username)]
                         );
                         if (existingUserByUsername.total > 0) {
-                            statusMessageEl.textContent = `Username "${username}" is already taken. Please choose another one.`; // Translated
+                            statusMessageEl.textContent = `Username "${username}" is already taken. Please choose another one.`;
                             statusMessageEl.style.color = 'red';
                             await account.deleteSession('current');
                             localStorage.removeItem('pendingUsername');
@@ -230,20 +241,19 @@
                                 Permission.read(Role.user(appwriteUser.$id)),
                                 Permission.update(Role.user(appwriteUser.$id)),
                                 Permission.delete(Role.user(appwriteUser.$id)),
-                                // Permission.read(Role.any()), // If profiles should be publicly readable
                             ]
                         );
                         console.log('User profile created successfully.');
                         return true;
                     } catch (creationError) {
                         console.error('Error creating user profile document:', creationError);
-                        statusMessageEl.textContent = `Error creating user profile: ${creationError.message}.`; // Translated
+                        statusMessageEl.textContent = `Error creating user profile: ${creationError.message}.`;
                         statusMessageEl.style.color = 'red';
                         return false;
                     }
                 } else {
                     console.error('Error checking user profile:', error);
-                    statusMessageEl.textContent = 'Error checking user profile.'; // Translated
+                    statusMessageEl.textContent = 'Error checking user profile.';
                     statusMessageEl.style.color = 'red';
                     return false;
                 }
@@ -253,14 +263,14 @@
         async function handleOAuthCallback() {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('oauthError')) {
-                statusMessageEl.textContent = 'Google login failed. Please try again.'; // Translated
+                statusMessageEl.textContent = 'Google login failed. Please try again.';
                 statusMessageEl.style.color = 'red';
                 localStorage.removeItem('pendingUsername');
                 window.history.replaceState({}, document.title, window.location.pathname);
                 return;
             }
             if (urlParams.has('usernameTaken')) {
-                statusMessageEl.textContent = 'The selected username is already taken. Please try another one.'; // Translated
+                statusMessageEl.textContent = 'The selected username is already taken. Please try another one.';
                 statusMessageEl.style.color = 'red';
                 localStorage.removeItem('pendingUsername');
                 window.history.replaceState({}, document.title, window.location.pathname);
@@ -274,22 +284,20 @@
                 if (!pendingUsername) {
                     try {
                         await databases.getDocument(USER_DATABASE_ID, USER_PROFILE_COLLECTION_ID, appwriteUser.$id);
-                        // If user has a profile and landed here (e.g. already logged in and tried to go to login page),
-                        // and successURL in createOAuth2Session is chat.html, this might not be hit often post-OAuth.
-                        // For now, we assume if they are here and logged in without a pending username, they might be trying to access login page directly.
-                        // If successURL for OAuth is properly chat.html, this case is less critical after login.
+                        // If user already has a profile and is logged in, no action needed here unless
+                        // successURL for OAuth was this page. If successURL is chat.html, they shouldn't land here often.
                     } catch (docError) {
-                        if (docError.code === 404) { // Logged in but no profile and no pending username
-                            statusMessageEl.textContent = 'Login successful, but a username was not found to complete your profile. Please try again by selecting a username.'; // Translated
+                        if (docError.code === 404) {
+                            statusMessageEl.textContent = 'Login successful, but a username was not found to complete your profile. Please try again by selecting a username.';
                             statusMessageEl.style.color = 'orange';
-                            await account.deleteSession('current'); // Log out to force re-entry of username
+                            await account.deleteSession('current');
                             localStorage.removeItem('pendingUsername');
                         }
                     }
-                    return;
+                    return; // No pending username to process.
                 }
 
-                statusMessageEl.textContent = `Google login successful (${appwriteUser.name}). Checking/creating profile...`; // Translated
+                statusMessageEl.textContent = `Google login successful (${appwriteUser.name}). Checking/creating profile...`;
                 statusMessageEl.style.color = 'green';
 
                 const profileOk = await checkAndCreateUserProfile(appwriteUser, pendingUsername);
@@ -297,10 +305,8 @@
                 if (profileOk) {
                     localStorage.removeItem('pendingUsername');
                     // Redirection to chat.html is handled by the successUrl in createOAuth2Session.
-                    // No explicit redirect here is needed if successUrl points to chat.html.
                 }
             } catch (error) {
-                // No active session or error getting account, normal on initial page load.
                 localStorage.removeItem('pendingUsername');
             }
         }
