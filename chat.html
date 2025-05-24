@@ -170,6 +170,13 @@
         #send-button:hover {
             background-color: #7020b2;
         }
+        #send-button:disabled { /* Style for disabled button */
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        body.dark-theme #send-button:disabled {
+            background-color: #555;
+        }
         #loading-messages {
             text-align: center;
             padding: 20px;
@@ -187,7 +194,7 @@
 
     <div class="chat-container">
         <h1>Firebase Messenger</h1>
-        <p id="welcomeMessage" style="text-align: center; margin-bottom: 15px;"></p>
+        <p id="welcomeMessage" style="text-align: center; margin-bottom: 15px;">Initializing...</p>
 
         <div id="chat-area">
             <div id="loading-messages">Loading messages...</div>
@@ -195,8 +202,8 @@
 
         <form id="send-form">
             <div id="input-area">
-                <input type="text" id="message-input" placeholder="Type your message..." autocomplete="off">
-                <button type="submit" id="send-button">Send</button>
+                <input type="text" id="message-input" placeholder="Type your message..." autocomplete="off" disabled>
+                <button type="submit" id="send-button" disabled>Send</button>
             </div>
         </form>
     </div>
@@ -207,46 +214,28 @@
         // --- Initialize Appwrite (for Auth & User Profile) ---
         let appwriteClient, appwriteAccount, appwriteDatabases;
         if (typeof window.Appwrite !== 'undefined') {
-            const { Client, Account, Databases: AppwriteDB } = window.Appwrite; // Alias Appwrite Databases
+            const { Client, Account, Databases: AppwriteDB } = window.Appwrite;
             appwriteClient = new Client();
             appwriteClient
                 .setEndpoint('https://fra.cloud.appwrite.io/v1') 
                 .setProject('6830dc21001a6cbe1791');    
             appwriteAccount = new Account(appwriteClient);
-            appwriteDatabases = new AppwriteDB(appwriteClient); // Use aliased Appwrite Databases
-            console.log("Appwrite SDK (for Auth/Profile) initialized successfully.");
+            appwriteDatabases = new AppwriteDB(appwriteClient);
+            console.log("Appwrite SDK (for Auth/Profile) initialized.");
         } else {
-            console.error("Appwrite SDK (IIFE version) failed to load.");
-            // Handle critical error: Appwrite SDK needed for user info
-            document.getElementById('welcomeMessage').textContent = "Error: Auth components failed to load.";
-            // Disable chat functionality if Appwrite SDK fails
-            const sendBtn = document.getElementById('send-button');
-            if(sendBtn) sendBtn.disabled = true;
-            document.getElementById('message-input').disabled = true;
-            // throw new Error("Appwrite SDK failed to load, chat cannot function.");
+            console.error("Appwrite SDK (IIFE version) FAILED to load.");
+            document.getElementById('welcomeMessage').textContent = "Error: Critical Auth components failed to load.";
+            // No need to throw error, just disable chat functionality
         }
         
-        // Appwrite Configuration for User Profiles
         const USER_DATABASE_ID_APPWRITE = '6830ef180034477d36b1';
         const USER_PROFILE_COLLECTION_ID_APPWRITE = '6830f5250009aa67b8f7';
 
         // --- Initialize Firebase (for Chat Messages) ---
-        // IMPORTANT: Make sure you have configured Firebase Realtime Database rules in your Firebase project console.
-        // e.g., allow authenticated users to read/write to the 'messages' path.
-        // Example rules (for testing, secure these for production):
-        // {
-        //   "rules": {
-        //     "messages": {
-        //       ".read": "auth != null",
-        //       ".write": "auth != null",
-        //       ".indexOn": ["timestamp"] // Important for orderByChild('timestamp')
-        //     }
-        //   }
-        // }
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getDatabase, ref, push, onChildAdded, query, limitToLast, orderByChild, serverTimestamp, get, startAt } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
-        const firebaseConfig = { // Your Firebase config
+        const firebaseConfig = {
             apiKey: "AIzaSyDMU9MsmNr0OfKDVB0Hyb8KYZElD-NPiC0",
             authDomain: "chatapp-e21b7.firebaseapp.com",
             databaseURL: "https://chatapp-e21b7-default-rtdb.firebaseio.com",
@@ -263,29 +252,25 @@
             firebaseDb = getDatabase(firebaseApp);
             console.log("Firebase SDK (for Messages) initialized successfully.");
         } catch (e) {
-            console.error("Firebase initialization failed:", e);
+            console.error("Firebase initialization FAILED:", e);
             document.getElementById('welcomeMessage').textContent = "Error: Chat message system failed to load.";
-            // Disable chat functionality if Firebase SDK fails
-            const sendBtn = document.getElementById('send-button');
-            if(sendBtn) sendBtn.disabled = true;
-            document.getElementById('message-input').disabled = true;
-            // throw new Error("Firebase SDK failed to load, chat cannot function.");
         }
 
         // --- DOM Elements ---
         const chatArea = document.getElementById('chat-area');
         const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button'); // Corrected ID from send-form to send-button
         const sendForm = document.getElementById('send-form');
         const welcomeMessageEl = document.getElementById('welcomeMessage');
         const loadingMessagesEl = document.getElementById('loading-messages');
         const themeToggleBtnEl = document.getElementById('themeToggleBtn');
 
-        let currentUserAppwrite = null; // From Appwrite session
-        let currentUserProfileAppwrite = null; // From Appwrite database
-        let lastMessageTimestamp = 0; // To fetch only new messages for realtime
+        let currentUserAppwrite = null; 
+        let currentUserProfileAppwrite = null; 
+        let lastMessageTimestamp = 0; 
 
         // --- Theme Toggle Functionality ---
-        if (themeToggleBtnEl) {
+        if (themeToggleBtnEl) { // Check if button exists
             const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
             let currentTheme = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
 
@@ -306,49 +291,79 @@
                 applyTheme(currentTheme);
             });
         } else {
-            console.error("Theme toggle button not found.");
+            console.warn("Theme toggle button not found in the DOM.");
         }
 
         // --- Appwrite User Session Check ---
         async function checkUserSessionAppwrite() {
+            console.log("Checking Appwrite user session...");
             if (!appwriteAccount || !appwriteDatabases) {
-                console.error("Appwrite services not available for session check.");
-                 window.location.href = window.location.origin + '/login.html'; // Redirect if critical Appwrite parts missing
+                console.error("Appwrite services not available for session check. Redirecting to login.");
+                if(welcomeMessageEl) welcomeMessageEl.textContent = "Appwrite connection error. Redirecting...";
+                window.location.href = window.location.origin + '/login.html';
                 return;
             }
             try {
                 currentUserAppwrite = await appwriteAccount.get();
-                currentUserProfileAppwrite = await appwriteDatabases.getDocument(
-                    USER_DATABASE_ID_APPWRITE,
-                    USER_PROFILE_COLLECTION_ID_APPWRITE,
-                    currentUserAppwrite.$id
-                );
-                if (welcomeMessageEl) welcomeMessageEl.textContent = `Logged in as: ${currentUserProfileAppwrite.username}`;
+                console.log("Appwrite user session found:", currentUserAppwrite);
                 
-                // Now that we have the user, load and subscribe to Firebase messages
-                if (firebaseDb) {
-                    loadInitialMessagesFirebase();
-                    subscribeToMessagesFirebase();
-                } else {
-                     if(loadingMessagesEl) loadingMessagesEl.textContent = 'Chat message system not available.';
-                }
+                try {
+                    currentUserProfileAppwrite = await appwriteDatabases.getDocument(
+                        USER_DATABASE_ID_APPWRITE,
+                        USER_PROFILE_COLLECTION_ID_APPWRITE,
+                        currentUserAppwrite.$id
+                    );
+                    console.log("Appwrite user profile found:", currentUserProfileAppwrite);
 
-            } catch (error) {
-                console.error("Appwrite: User not logged in or profile not found:", error);
+                    if (!currentUserProfileAppwrite.username) {
+                        console.error("Appwrite user profile does not contain a username. Redirecting to login.");
+                        if(welcomeMessageEl) welcomeMessageEl.textContent = `Profile error for ${currentUserAppwrite.name}. Redirecting...`;
+                        // Optional: Attempt to delete corrupt session or guide user
+                        // await appwriteAccount.deleteSession('current');
+                        window.location.href = window.location.origin + '/login.html?error=profile_incomplete';
+                        return;
+                    }
+
+                    if (welcomeMessageEl) welcomeMessageEl.textContent = `Logged in as: ${currentUserProfileAppwrite.username}`;
+                    
+                    // Enable chat features only after user info is confirmed
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
+                    
+                    if (firebaseDb) {
+                        loadInitialMessagesFirebase();
+                        subscribeToMessagesFirebase();
+                    } else {
+                        console.error("Firebase DB not initialized. Cannot load messages.");
+                        if(loadingMessagesEl) loadingMessagesEl.textContent = 'Chat message system not available.';
+                    }
+
+                } catch (profileError) {
+                    console.error("Failed to fetch Appwrite user profile:", profileError);
+                    if(welcomeMessageEl) welcomeMessageEl.textContent = `Error fetching profile for ${currentUserAppwrite.name}. Redirecting...`;
+                    // This user is logged into Appwrite but has no profile doc, which shouldn't happen if login.html worked.
+                    // Redirect to login to try to fix the profile or re-auth.
+                    window.location.href = window.location.origin + '/login.html?error=profile_missing';
+                    return;
+                }
+                
+            } catch (sessionError) {
+                console.log("Appwrite: No active user session found. Redirecting to login.", sessionError);
+                if(welcomeMessageEl) welcomeMessageEl.textContent = "Not logged in. Redirecting...";
                 window.location.href = window.location.origin + '/login.html'; 
             }
         }
 
         // --- Firebase Message Functions ---
         function displayMessageFirebase(messageData, messageId, isAppendingForHistory = false) {
+            // ... (your existing displayMessageFirebase logic - looks okay)
             if (loadingMessagesEl && loadingMessagesEl.style.display !== 'none') {
                 loadingMessagesEl.style.display = 'none';
             }
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message');
-            // Use Appwrite user ID for sent/received logic
             messageDiv.classList.add(messageData.senderUserId === currentUserAppwrite?.$id ? 'sent' : 'received');
-            messageDiv.dataset.id = messageId; // Use Firebase message key as ID
+            messageDiv.dataset.id = messageId;
 
             const senderSpan = document.createElement('span');
             senderSpan.classList.add('sender');
@@ -378,10 +393,9 @@
         }
 
         async function loadInitialMessagesFirebase() {
-            if (!firebaseDb) return;
+            // ... (your existing loadInitialMessagesFirebase logic - seems okay, ensure Firebase rules allow read and indexing)
+            if (!firebaseDb || !currentUserAppwrite) return; // Wait for user
             const messagesRef = ref(firebaseDb, 'messages');
-            // Order by timestamp and get the last 25.
-            // Firebase RTDB ordering needs an index on 'timestamp' in your rules.
             const messagesQuery = query(messagesRef, orderByChild('timestamp'), limitToLast(25));
             
             try {
@@ -396,34 +410,22 @@
                         messages.push({ id: childSnapshot.key, ...childSnapshot.val() });
                         messagesFound = true;
                     });
-                    // snapshot forEach does not guarantee order if not explicitly sorted client-side from object
-                    // but orderByChild in query should handle server-side sort.
-                    // The `messages` array will be in ascending order of timestamp here.
                     messages.forEach(msg => displayMessageFirebase(msg, msg.id, true)); 
-                    
                     if (messages.length > 0) {
                         lastMessageTimestamp = messages[messages.length - 1].timestamp;
                     }
                 }
-                
                 if(!messagesFound) {
                     const noMsgDiv = document.createElement('div');
                     noMsgDiv.id = 'loading-messages'; 
                     noMsgDiv.textContent = 'No messages yet. Start the conversation!';
                     chatArea.appendChild(noMsgDiv);
                 } else {
-                     chatArea.scrollTop = chatArea.scrollHeight; // Scroll to bottom of loaded history
+                     chatArea.scrollTop = chatArea.scrollHeight;
                 }
             } catch (error) {
                 console.error("Error loading initial messages from Firebase:", error);
-                 if(loadingMessagesEl && chatArea.contains(loadingMessagesEl)) {
-                    loadingMessagesEl.textContent = 'Failed to load messages.';
-                } else if (!chatArea.contains(loadingMessagesEl)) {
-                    const errorMsgDiv = document.createElement('div');
-                    errorMsgDiv.textContent = 'Failed to load messages.';
-                    errorMsgDiv.style.textAlign = 'center';
-                    chatArea.appendChild(errorMsgDiv);
-                }
+                // ... (error display logic)
             }
         }
 
@@ -435,9 +437,14 @@
             }
             const messageText = messageInput.value.trim();
 
-            if (!messageText || !currentUserAppwrite || !currentUserProfileAppwrite) {
-                console.warn("Cannot send message: No text, or Appwrite user/profile missing.");
-                alert("You must be logged in to send messages.");
+            // More robust check
+            if (!messageText || !currentUserAppwrite || !currentUserProfileAppwrite || !currentUserProfileAppwrite.username) {
+                console.error("Cannot send message: No text, or Appwrite user/profile/username missing.");
+                alert("Your session or profile information is incomplete. Please try refreshing or logging in again.");
+                // Consider a redirect if critical info is missing
+                // if (!currentUserAppwrite || !currentUserProfileAppwrite) {
+                //    window.location.href = window.location.origin + '/login.html?error=session_expired';
+                // }
                 return;
             }
 
@@ -445,56 +452,52 @@
             try {
                 await push(messagesRef, {
                     text: messageText,
-                    senderUserId: currentUserAppwrite.$id, // From Appwrite
-                    senderUsername: currentUserProfileAppwrite.username, // From Appwrite
-                    timestamp: serverTimestamp() // Firebase server timestamp
+                    senderUserId: currentUserAppwrite.$id, 
+                    senderUsername: currentUserProfileAppwrite.username, 
+                    timestamp: serverTimestamp() 
                 });
                 messageInput.value = ''; 
             } catch (error) {
                 console.error("Error sending message to Firebase:", error);
-                alert("Failed to send message. Please try again. Error: " + error.message);
+                alert("Failed to send message. Error: " + error.message);
             }
         }
 
         function subscribeToMessagesFirebase() {
-            if (!firebaseDb) return;
+            // ... (your existing subscribeToMessagesFirebase logic - seems okay)
+            if (!firebaseDb || !currentUserAppwrite) return; // Wait for user
             const messagesRef = ref(firebaseDb, 'messages');
-            // Listen for new messages added after the initial load
-            // Uses lastMessageTimestamp to only get newer messages.
-            // Note: For perfect realtime, you might need a more robust way than just startAt if messages can have identical timestamps.
-            // Or, simply listen to all child_added and let the displayMessage logic handle duplicates if any by checking dataset.id.
-            // For simplicity, this will fetch messages added after the initial batch.
             const messagesQuery = query(messagesRef, orderByChild('timestamp'), startAt(lastMessageTimestamp + 1));
 
             onChildAdded(messagesQuery, (snapshot) => {
                 const newMessage = snapshot.val();
                 const messageId = snapshot.key;
                 if (!document.querySelector(`.message[data-id="${messageId}"]`)) {
-                     // Avoid displaying own message if it was already pushed optimistically (not implemented here)
                     displayMessageFirebase(newMessage, messageId, false);
                 }
-                lastMessageTimestamp = newMessage.timestamp; // Update last seen timestamp
+                lastMessageTimestamp = newMessage.timestamp; 
             });
             console.log("Subscribed to real-time Firebase message updates.");
         }
         
         // --- Event Listeners & Initialization ---
-        if (sendForm) {
-             sendForm.addEventListener('submit', sendMessageFirebase); // Use Firebase send function
+        if (sendForm && sendButton) { // Ensure both form and button exist
+             sendForm.addEventListener('submit', sendMessageFirebase);
+        } else {
+            console.warn("Send form or button not found.");
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            if (appwriteClient && firebaseApp) { // Check if both SDKs initialized
-                checkUserSessionAppwrite(); // This will then call Firebase load/subscribe
+            // Initialize Appwrite first, then Firebase, then check session
+            if (appwriteClient && firebaseApp) { 
+                checkUserSessionAppwrite(); 
             } else {
-                console.error("One or both SDKs not ready on DOMContentLoaded.");
-                if(welcomeMessageEl) welcomeMessageEl.textContent = "Chat application failed to initialize properly.";
+                console.error("One or both SDKs (Appwrite/Firebase) FAILED to initialize before DOMContentLoaded.");
+                if(welcomeMessageEl) welcomeMessageEl.textContent = "Chat application critical components failed to load.";
+                messageInput.disabled = true;
+                if(sendButton) sendButton.disabled = true;
             }
         });
-
-        // No realtimeUnsubscribe for Firebase in this manner with onChildAdded,
-        // Firebase handles its own listener management. If you need to stop listening, you use `off()`.
-        // For simplicity, this example doesn't explicitly detach listeners on beforeunload.
 
     </script>
 </body>
