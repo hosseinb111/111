@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Firebase Messenger</title>
     <style>
-        /* Your existing CSS styles - remain unchanged */
+        /* Your existing CSS styles from chat.html - remain unchanged */
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             display: flex;
@@ -269,7 +269,7 @@
         let lastMessageTimestamp = 0; 
 
         // --- Theme Toggle Functionality ---
-        if (themeToggleBtnEl) {
+        if (themeToggleBtnEl) { 
             const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
             let currentTheme = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
 
@@ -290,22 +290,21 @@
                 applyTheme(currentTheme);
             });
         } else {
-            console.warn("Theme toggle button not found in the DOM.");
+            console.warn("Theme toggle button ('themeToggleBtn') not found in the DOM.");
         }
 
         // --- Appwrite User Session Check ---
         async function checkUserSessionAppwrite() {
-            console.log("Checking Appwrite user session...");
+            console.log("chat.html: Checking Appwrite user session...");
             if (!appwriteAccount || !appwriteDatabases) {
-                console.error("Appwrite services not available for session check. Redirecting to login page.");
+                console.error("chat.html: Appwrite services not available. Redirecting to login page.");
                 if(welcomeMessageEl) welcomeMessageEl.textContent = "Appwrite connection error. Redirecting...";
-                // *** MODIFIED: Redirect to index.html ***
-                window.location.href = window.location.origin + '/index.html'; 
+                window.location.href = window.location.origin + '/index.html'; // Ensure this is your login page
                 return;
             }
             try {
                 currentUserAppwrite = await appwriteAccount.get();
-                console.log("Appwrite user session found:", currentUserAppwrite);
+                console.log("chat.html: Appwrite user session found:", currentUserAppwrite.name);
                 
                 try {
                     currentUserProfileAppwrite = await appwriteDatabases.getDocument(
@@ -313,17 +312,16 @@
                         USER_PROFILE_COLLECTION_ID_APPWRITE,
                         currentUserAppwrite.$id
                     );
-                    console.log("Appwrite user profile found:", currentUserProfileAppwrite);
+                    console.log("chat.html: Appwrite user profile found:", currentUserProfileAppwrite);
 
-                    if (!currentUserProfileAppwrite.username) {
-                        console.error("Appwrite user profile does not contain a username. Redirecting to login page.");
-                        if(welcomeMessageEl) welcomeMessageEl.textContent = `Profile error for ${currentUserAppwrite.name}. Redirecting...`;
-                        // *** MODIFIED: Redirect to index.html with error parameter ***
-                        window.location.href = window.location.origin + '/index.html?error=profile_incomplete';
+                    if (!currentUserProfileAppwrite || !currentUserProfileAppwrite.username) { // Check both profile and username
+                        console.error("chat.html: Appwrite user profile or username missing. Redirecting to login page.", currentUserProfileAppwrite);
+                        if(welcomeMessageEl) welcomeMessageEl.textContent = `Profile data incomplete for ${currentUserAppwrite.name}. Please complete login.`;
+                        window.location.href = window.location.origin + '/index.html?error=profile_incomplete_or_missing_username';
                         return;
                     }
 
-                    if (welcomeMessageEl) welcomeMessageEl.textContent = `Logged in as: ${currentUserProfileAppwrite.username}`;
+                    if (welcomeMessageEl) welcomeMessageEl.textContent = `Hi ${currentUserProfileAppwrite.username}!`;
                     
                     messageInput.disabled = false;
                     sendButton.disabled = false; 
@@ -332,27 +330,26 @@
                         loadInitialMessagesFirebase();
                         subscribeToMessagesFirebase();
                     } else {
-                        console.error("Firebase DB not initialized. Cannot load messages.");
+                        console.error("chat.html: Firebase DB not initialized. Cannot load messages.");
                         if(loadingMessagesEl) loadingMessagesEl.textContent = 'Chat message system not available.';
                     }
 
                 } catch (profileError) {
-                    console.error("Failed to fetch Appwrite user profile:", profileError);
-                    if(welcomeMessageEl) welcomeMessageEl.textContent = `Error fetching profile for ${currentUserAppwrite.name}. Redirecting...`;
-                    // *** MODIFIED: Redirect to index.html with error parameter ***
-                    window.location.href = window.location.origin + '/index.html?error=profile_missing';
+                    console.error(`chat.html: Failed to fetch Appwrite user profile for ${currentUserAppwrite.$id}:`, profileError);
+                    if(welcomeMessageEl) welcomeMessageEl.textContent = `Error fetching your profile. Please try logging in again.`;
+                    window.location.href = window.location.origin + '/index.html?error=profile_fetch_failed';
                     return;
                 }
                 
             } catch (sessionError) {
-                console.log("Appwrite: No active user session found. Redirecting to login page.", sessionError);
+                console.log("chat.html: No active Appwrite session found. Redirecting to login page.", sessionError);
                 if(welcomeMessageEl) welcomeMessageEl.textContent = "Not logged in. Redirecting...";
-                // *** MODIFIED: Redirect to index.html ***
                 window.location.href = window.location.origin + '/index.html'; 
             }
         }
 
         // --- Firebase Message Functions ---
+        // (No changes to these functions from the previous version you had, just ensure they are present)
         function displayMessageFirebase(messageData, messageId, isAppendingForHistory = false) {
             if (loadingMessagesEl && loadingMessagesEl.style.display !== 'none') {
                 loadingMessagesEl.style.display = 'none';
@@ -411,19 +408,19 @@
                         lastMessageTimestamp = messages[messages.length - 1].timestamp;
                     }
                 }
-                if(!messagesFound) {
+                if(!messagesFound && chatArea) { // check chatArea exists
                     const noMsgDiv = document.createElement('div');
                     noMsgDiv.id = 'loading-messages'; 
                     noMsgDiv.textContent = 'No messages yet. Start the conversation!';
                     chatArea.appendChild(noMsgDiv);
-                } else {
+                } else if (messagesFound) {
                      chatArea.scrollTop = chatArea.scrollHeight;
                 }
             } catch (error) {
                 console.error("Error loading initial messages from Firebase:", error);
                 if(loadingMessagesEl && chatArea.contains(loadingMessagesEl)) {
                     loadingMessagesEl.textContent = 'Failed to load messages.';
-                } else if (!chatArea.contains(loadingMessagesEl) && chatArea) { // Check if chatArea is not null
+                } else if (!chatArea.contains(loadingMessagesEl) && chatArea) {
                     const errorMsgDiv = document.createElement('div');
                     errorMsgDiv.textContent = 'Failed to load messages.';
                     errorMsgDiv.style.textAlign = 'center';
@@ -464,15 +461,23 @@
         function subscribeToMessagesFirebase() {
             if (!firebaseDb || !currentUserAppwrite) return; 
             const messagesRef = ref(firebaseDb, 'messages');
+            // For new messages, listen starting after the last known timestamp.
+            // Note: If multiple messages have the exact same timestamp as lastMessageTimestamp, startAt might include them.
+            // A more robust way for live updates might involve listening to all child_added and letting display logic handle duplicates.
+            // For simplicity, we'll use startAt(lastMessageTimestamp + 1) to try to get only newer ones.
             const messagesQuery = query(messagesRef, orderByChild('timestamp'), startAt(lastMessageTimestamp + 1));
 
             onChildAdded(messagesQuery, (snapshot) => {
                 const newMessage = snapshot.val();
                 const messageId = snapshot.key;
+                // Basic check to avoid re-displaying, especially if startAt isn't perfect
                 if (!document.querySelector(`.message[data-id="${messageId}"]`)) {
-                    displayMessageFirebase(newMessage, messageId, false);
+                    displayMessageFirebase(newMessage, messageId, false); 
                 }
-                lastMessageTimestamp = newMessage.timestamp; 
+                // Update lastMessageTimestamp if this new message is indeed newer
+                if (newMessage.timestamp > lastMessageTimestamp) {
+                    lastMessageTimestamp = newMessage.timestamp; 
+                }
             });
             console.log("Subscribed to real-time Firebase message updates.");
         }
@@ -481,7 +486,7 @@
         if (sendForm && sendButton) { 
              sendForm.addEventListener('submit', sendMessageFirebase);
         } else {
-            console.warn("Send form or button not found.");
+            console.warn("Send form or send button ('send-button') not found.");
         }
 
         window.addEventListener('DOMContentLoaded', () => {
