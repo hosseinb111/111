@@ -50,7 +50,7 @@
         }
         label {
             display: block;
-            text-align: left;
+            text-align: left; /* Default for LTR */
             margin-bottom: 8px;
             font-weight: 600;
             font-size: 0.9em;
@@ -67,6 +67,7 @@
             font-size: 1em;
             background-color: #f5f6f7;
             margin-bottom: 0; 
+            text-align: left; /* Default for LTR */
         }
         body.dark-theme input[type="text"] {
             background-color: #3a3b3c;
@@ -104,7 +105,7 @@
         .theme-toggle-container {
             position: absolute;
             top: 20px;
-            right: 20px;
+            right: 20px; /* Default for LTR */
         }
         .theme-toggle-btn {
             background-color: #e4e6eb;
@@ -144,58 +145,67 @@
         <p id="statusMessage">Initializing SDKs...</p>
     </div>
 
+    <!-- 
+        Appwrite SDK - Ensure this version is stable and correct.
+        The official Appwrite documentation usually lists the recommended stable version.
+        Version 18.1.1 is used here as provided in your initial code.
+        If issues persist, consider trying the latest official stable version (e.g., 15.0.0 for web as of late 2023/early 2024).
+        Official IIFE CDN link (example): https://cdn.jsdelivr.net/npm/appwrite@15.0.0/dist/iife/appwrite.min.js
+    -->
     <script src="https://cdn.jsdelivr.net/npm/appwrite@18.1.1/dist/iife/sdk.min.js"></script>
 
     <script type="module">
         // Declare variables at module scope
-        let client, account, databases; 
-        const statusMessageEl = document.getElementById('statusMessage'); // Get status message element early
+        let client, account, databases, Query, Permission, Role, ID; 
+        const statusMessageEl = document.getElementById('statusMessage');
         const googleLoginBtnEl = document.getElementById('googleLoginBtn');
+        const usernameInputEl = document.getElementById('usernameInput');
+        const themeToggleBtnEl = document.getElementById('themeToggleBtn');
 
-        // Ensure Appwrite SDK is loaded
+        // Appwrite Configuration Constants
+        // !!! IMPORTANT: Ensure these IDs are correct and match your Appwrite project setup !!!
+        const APPWRITE_ENDPOINT = 'https://fra.cloud.appwrite.io/v1';
+        const APPWRITE_PROJECT_ID = '6830dc21001a6cbe1791';
+        const USER_DATABASE_ID = '6830ef180034477d36b1';
+        const USER_PROFILE_COLLECTION_ID = '6830f5250009aa67b8f7';
+
+        // --- Initialize Appwrite SDK ---
         if (typeof window.Appwrite === 'undefined') {
             console.error("index.html: Appwrite SDK (IIFE version) failed to load.");
             if (statusMessageEl) statusMessageEl.textContent = "Critical Error: Appwrite SDK failed. Please refresh.";
             if (googleLoginBtnEl) googleLoginBtnEl.disabled = true;
-            // We don't throw an error here to allow the rest of the script (like DOMContentLoaded listener) to potentially run
-            // and handle UI state, but dependent functions won't work.
         } else {
-            const { Client: AppwriteClient, Account: AppwriteAccount, Databases: AppwriteDatabases, ID, Permission, Role, Query } = window.Appwrite;
-
-            const APPWRITE_ENDPOINT = 'https://fra.cloud.appwrite.io/v1';
-            const APPWRITE_PROJECT_ID = '6830dc21001a6cbe1791';
+            // Destructure necessary components from Appwrite SDK
+            const AppwriteClasses = window.Appwrite;
+            client = new AppwriteClasses.Client();
+            account = new AppwriteClasses.Account(client); // Pass client instance
+            databases = new AppwriteClasses.Databases(client); // Pass client instance
+            ID = AppwriteClasses.ID;
+            Permission = AppwriteClasses.Permission;
+            Role = AppwriteClasses.Role;
+            Query = AppwriteClasses.Query;
             
-            client = new AppwriteClient(); // Assign to module-scoped variable
             client
                 .setEndpoint(APPWRITE_ENDPOINT)
                 .setProject(APPWRITE_PROJECT_ID);
-
-            account = new AppwriteAccount(client); // Assign to module-scoped variable
-            databases = new AppwriteDatabases(client); // Assign to module-scoped variable
+            
             console.log("index.html: Appwrite SDK initialized and services configured.");
-            if (statusMessageEl) statusMessageEl.textContent = "Please choose a username."; // Clear "Initializing" message
+            if (statusMessageEl) statusMessageEl.textContent = "Please choose a username.";
             if (googleLoginBtnEl) googleLoginBtnEl.disabled = false; // Enable login button
         }
         
-        // Appwrite Database and Collection Configuration (for user profiles)
-        const USER_DATABASE_ID = '6830ef180034477d36b1';
-        const USER_PROFILE_COLLECTION_ID = '6830f5250009aa67b8f7';
-
-        // --- DOM Elements (other than status and login button already fetched) ---
-        const usernameInputEl = document.getElementById('usernameInput');
-        const themeToggleBtnEl = document.getElementById('themeToggleBtn');
-
         // --- Theme Toggle Functionality ---
         if (themeToggleBtnEl) {
             const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
             let currentTheme = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
+            
             function applyTheme(theme) {
                 if (theme === 'dark') {
                     document.body.classList.add('dark-theme');
-                    themeToggleBtnEl.textContent = '☀️';
+                    themeToggleBtnEl.textContent = '☀️'; // Sun icon for light mode
                 } else {
                     document.body.classList.remove('dark-theme');
-                    themeToggleBtnEl.textContent = '🌙';
+                    themeToggleBtnEl.textContent = '🌙'; // Moon icon for dark mode
                 }
             }
             applyTheme(currentTheme);
@@ -209,23 +219,29 @@
         }
         
         // --- Appwrite Login Logic ---
-        if (googleLoginBtnEl) {
+        if (googleLoginBtnEl && usernameInputEl) { // Ensure both elements exist
             googleLoginBtnEl.addEventListener('click', async () => {
-                if (!client || !account) { // Check if Appwrite services are available
-                    if (statusMessageEl) statusMessageEl.textContent = "Appwrite service not ready. Please refresh.";
-                    console.error("index.html: Appwrite client/account not initialized for login button click.");
+                // Re-check if Appwrite services are available (though checked at init)
+                if (!client || !account || !databases || !Query || !Permission || !Role || !ID) {
+                    if (statusMessageEl) statusMessageEl.textContent = "Appwrite service not ready. Please refresh or wait.";
+                    console.error("index.html: Appwrite services not initialized for login button click.");
                     return;
                 }
 
                 const desiredUsername = usernameInputEl.value.trim();
                 if (!desiredUsername) {
-                    if (statusMessageEl) statusMessageEl.textContent = 'Please choose a username first.';
-                    if (statusMessageEl) statusMessageEl.style.color = 'red';
+                    if (statusMessageEl) {
+                        statusMessageEl.textContent = 'Please choose a username first.';
+                        statusMessageEl.style.color = 'red';
+                    }
                     return;
                 }
+                // Username regex: letters, numbers, underscore, 3-30 characters
                 if (!/^[a-zA-Z0-9_]{3,30}$/.test(desiredUsername)) {
-                    if (statusMessageEl) statusMessageEl.textContent = 'Username must be 3-30 chars (letters, numbers, _).';
-                    if (statusMessageEl) statusMessageEl.style.color = 'red';
+                    if (statusMessageEl) {
+                        statusMessageEl.textContent = 'Username must be 3-30 chars (letters, numbers, _).';
+                        statusMessageEl.style.color = 'red';
+                    }
                     return;
                 }
 
@@ -236,28 +252,34 @@
                 }
                 
                 try {
-                    const currentFullUrl = window.location.href.split('?')[0]; 
-                    const successUrlForOAuth = currentFullUrl; 
-                    const failureUrlForOAuth = `${currentFullUrl}?oauthError=true`;
+                    // Construct success and failure URLs for OAuth
+                    // Ensure base URL doesn't include query strings or hashes
+                    const currentBaseUrl = window.location.href.split('?')[0].split('#')[0]; 
+                    const successUrlForOAuth = currentBaseUrl; 
+                    const failureUrlForOAuth = `${currentBaseUrl}?oauthError=true`;
 
-                    console.log("index.html: Starting OAuth with successUrl:", successUrlForOAuth);
+                    console.log("index.html: Starting OAuth with successUrl:", successUrlForOAuth, "and failureUrl:", failureUrlForOAuth);
+                    // Initiate Google OAuth2 login via Appwrite
                     await account.createOAuth2Session('google', successUrlForOAuth, failureUrlForOAuth);
+                    // The browser will redirect to Google, then back to one of the above URLs.
+                    // The handleOAuthCallback function will execute on page load after redirect.
                 } catch (error) {
                     console.error('index.html: Error starting Google OAuth2 login:', error);
                     if (statusMessageEl) {
                         statusMessageEl.textContent = 'Error starting Google login. ' + error.message;
                         statusMessageEl.style.color = 'red';
                     }
-                    localStorage.removeItem('pendingUsername');
+                    localStorage.removeItem('pendingUsername'); // Clean up pending username
                 }
             });
         } else {
-            console.error("index.html: Google login button not found.");
+            console.error("index.html: Google login button or username input not found.");
+            if (googleLoginBtnEl) googleLoginBtnEl.disabled = true; 
         }
 
         // --- Function to check/create user profile in Appwrite ---
         async function checkAndCreateUserProfile(appwriteUser, usernameToSet) {
-            if (!databases || !account) { // Check for account too, for deleteSession
+            if (!databases || !account || !Query || !Permission || !Role || !ID) { 
                 console.error("index.html: Databases or Account service not initialized. Cannot check/create profile.");
                 if (statusMessageEl) {
                     statusMessageEl.textContent = "Application error: Database service unavailable.";
@@ -266,13 +288,16 @@
                 return false; 
             }
             try {
+                // Check if a profile document already exists for this Appwrite user ID
                 await databases.getDocument(USER_DATABASE_ID, USER_PROFILE_COLLECTION_ID, appwriteUser.$id);
                 console.log('index.html: User profile already exists for user:', appwriteUser.$id);
                 return true; 
             } catch (error) {
-                if (error.code === 404) { 
+                if (error.code === 404) { // 404 means profile not found
                     console.log('index.html: User profile not found for user:', appwriteUser.$id, '. Creating new one with username:', usernameToSet);
                     try {
+                        // IMPORTANT: Before creating, check if the desired username is already taken by another user.
+                        // This requires the 'username' attribute to be indexed in your Appwrite collection.
                         const existingUserByUsername = await databases.listDocuments(
                             USER_DATABASE_ID,
                             USER_PROFILE_COLLECTION_ID,
@@ -283,24 +308,28 @@
                                 statusMessageEl.textContent = `Username "${usernameToSet}" is already taken. Please choose another.`;
                                 statusMessageEl.style.color = 'red';
                             }
+                            // Log out the user as they can't proceed with this username
                             await account.deleteSession('current').catch(e => console.warn("index.html: Failed to delete session on username taken:", e));
                             localStorage.removeItem('pendingUsername'); 
                             return false; 
                         }
+
+                        // Create the user profile document. Document ID is the Appwrite User ID.
+                        // Ensure attributes (appwriteUserId, username, email, googleName) match your collection schema.
                         await databases.createDocument(
                             USER_DATABASE_ID,
                             USER_PROFILE_COLLECTION_ID,
-                            appwriteUser.$id, 
+                            appwriteUser.$id, // Document ID = User ID
                             {
-                                appwriteUserId: appwriteUser.$id, 
+                                appwriteUserId: appwriteUser.$id, // Storing Appwrite user ID
                                 username: usernameToSet,
                                 email: appwriteUser.email, 
-                                googleName: appwriteUser.name, 
+                                googleName: appwriteUser.name, // User's name from Google
                             },
-                            [ 
-                                Permission.read(Role.user(appwriteUser.$id)),
-                                Permission.update(Role.user(appwriteUser.$id)),
-                                Permission.delete(Role.user(appwriteUser.$id)),
+                            [ // Set permissions for the profile document
+                                Permission.read(Role.user(appwriteUser.$id)), // Only the user can read
+                                Permission.update(Role.user(appwriteUser.$id)), // Only the user can update
+                                Permission.delete(Role.user(appwriteUser.$id)), // Only the user can delete
                             ]
                         );
                         console.log('index.html: User profile created successfully for user:', appwriteUser.$id, 'with username:', usernameToSet);
@@ -311,11 +340,13 @@
                             statusMessageEl.textContent = `Error creating profile: ${creationError.message}. Try again.`;
                             statusMessageEl.style.color = 'red';
                         }
+                        // Log out the user as profile creation failed
                         await account.deleteSession('current').catch(e => console.warn("index.html: Failed to delete session on profile creation error:", e));
                         localStorage.removeItem('pendingUsername');
                         return false; 
                     }
                 } else { 
+                    // Other error when trying to getDocument (not 404)
                     console.error('index.html: Error checking user profile:', error);
                     if (statusMessageEl) {
                         statusMessageEl.textContent = 'Error checking profile. Try again.';
@@ -327,9 +358,10 @@
         }
 
         // --- Handle OAuth Callback after redirect from Google ---
+        // This function runs when the page loads, to check if it's a redirect from Google.
         async function handleOAuthCallback() {
             console.log("index.html: Handling OAuth Callback...");
-            if (!account || !databases) { // Check if services are available
+            if (!account || !databases || !Query || !Permission || !Role || !ID) { // Check if services are available
                  console.error("index.html: Appwrite account or databases service not ready for OAuth callback.");
                  if (statusMessageEl) statusMessageEl.textContent = "Login components not ready. Please refresh.";
                  return;
@@ -342,40 +374,53 @@
                     statusMessageEl.style.color = 'red';
                 }
                 localStorage.removeItem('pendingUsername');
-                window.history.replaceState({}, document.title, window.location.pathname); 
+                try {
+                    window.history.replaceState({}, document.title, window.location.pathname); // Clean up URL
+                } catch (e) {
+                    console.warn("index.html: Could not replace history state (oauthError):", e.message);
+                }
                 return;
             }
             
+            // Try to get the Appwrite user session. This confirms if OAuth was successful.
             try {
                 const appwriteUser = await account.get(); 
-                console.log("index.html: OAuth Callback - Appwrite user session confirmed:", appwriteUser.name);
+                console.log("index.html: OAuth Callback - Appwrite user session confirmed:", appwriteUser.name, appwriteUser.$id);
                 
                 const pendingUsername = localStorage.getItem('pendingUsername');
                 if (!pendingUsername) {
-                    console.log('index.html: Logged in, but no pending username for profile creation.');
+                    // User is logged in with Appwrite (Google), but no pending username was found.
+                    console.log('index.html: Logged in, but no pending username for profile creation. Checking existing profile.');
                     try {
-                         await databases.getDocument(USER_DATABASE_ID, USER_PROFILE_COLLECTION_ID, appwriteUser.$id);
-                         console.log("index.html: User profile already exists. Redirecting to chat.");
-                         if (statusMessageEl) {
+                        // Check if their profile document (keyed by appwriteUser.$id) already exists.
+                        await databases.getDocument(USER_DATABASE_ID, USER_PROFILE_COLLECTION_ID, appwriteUser.$id);
+                        console.log("index.html: User profile already exists. Redirecting to chat.");
+                        if (statusMessageEl) {
                             statusMessageEl.textContent = `Welcome back, ${appwriteUser.name}! Redirecting...`;
                             statusMessageEl.style.color = 'green';
-                         }
-                         window.location.href = window.location.origin + '/111/chat.html'; 
+                        }
+                        window.location.href = window.location.origin + '/111/chat.html'; 
                     } catch (profileCheckError) {
                         if (profileCheckError.code === 404) {
-                             if (statusMessageEl) {
-                                statusMessageEl.textContent = 'Session active, but profile incomplete. Re-enter username & login.';
+                            if (statusMessageEl) {
+                                statusMessageEl.textContent = 'Session active, but profile incomplete. Please re-enter username & login.';
                                 statusMessageEl.style.color = 'orange';
-                             }
+                            }
                         } else {
-                            console.error("index.html: Error checking existing profile:", profileCheckError);
+                            console.error("index.html: Error checking existing profile (no pending username):", profileCheckError);
                             if (statusMessageEl) statusMessageEl.textContent = 'Error verifying profile.';
                         }
                     }
                     localStorage.removeItem('pendingUsername'); 
-                    return;
+                    try {
+                        window.history.replaceState({}, document.title, window.location.pathname); // Clean up URL
+                    } catch (e) {
+                        console.warn("index.html: Could not replace history state (no pending username):", e.message);
+                    }
+                    return; 
                 }
 
+                // If we have a pendingUsername, proceed with profile creation/check
                 if (statusMessageEl) {
                     statusMessageEl.textContent = `Google login successful (${appwriteUser.name}). Finalizing profile: ${pendingUsername}...`;
                     statusMessageEl.style.color = 'blue';
@@ -392,30 +437,36 @@
                     window.location.href = window.location.origin + '/111/chat.html'; 
                 } else {
                     console.log("index.html: Profile setup failed. User stays on index.html.");
-                    // Error message should already be set by checkAndCreateUserProfile
                 }
-                window.history.replaceState({}, document.title, window.location.pathname);
+                try {
+                    window.history.replaceState({}, document.title, window.location.pathname); // Clean up URL
+                } catch (e) {
+                    console.warn("index.html: Could not replace history state (after profile setup):", e.message);
+                }
 
             } catch (error) {
                 console.log('index.html: No active Appwrite session after OAuth, or error in callback handling:', error);
-                if (statusMessageEl) {
+                if (statusMessageEl && (statusMessageEl.textContent.includes('Redirecting to Google') || statusMessageEl.textContent.includes('Initializing SDKs...'))) {
                     statusMessageEl.textContent = 'Login process incomplete. Please try again.';
                     statusMessageEl.style.color = 'red';
                 }
                 localStorage.removeItem('pendingUsername');
-                window.history.replaceState({}, document.title, window.location.pathname);
+                try {
+                    window.history.replaceState({}, document.title, window.location.pathname); // Clean up URL
+                } catch (e) {
+                    console.warn("index.html: Could not replace history state (OAuth callback error):", e.message);
+                }
             }
         }
         
+        // --- DOMContentLoaded: Entry point after HTML is parsed ---
         window.addEventListener('DOMContentLoaded', () => {
             // Check if Appwrite services were initialized successfully
-            if (client && account && databases) {
+            if (client && account && databases && Query && Permission && Role && ID) { 
                 console.log("index.html: DOMContentLoaded - Appwrite services ready. Running OAuth callback handler.");
                 handleOAuthCallback(); 
             } else {
-                console.error("index.html: DOMContentLoaded - Appwrite services NOT ready. Callback handler not run. SDK might have failed to load.");
-                // Status message should already be set if SDK failed to load.
-                // If SDK loaded but client/account/databases are null for other reasons:
+                console.error("index.html: DOMContentLoaded - Appwrite services NOT fully ready. Callback handler not run. SDK might have failed to load or initialize parts.");
                 if (statusMessageEl && !statusMessageEl.textContent.includes("SDK failed")) { 
                     statusMessageEl.textContent = "Error: Login components failed to load properly.";
                     statusMessageEl.style.color = "red";
