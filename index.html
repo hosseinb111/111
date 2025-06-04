@@ -142,9 +142,8 @@
     <p id="statusMessage">Initializing SDKs...</p>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/appwrite@18.1.1/dist/iife/sdk.min.js"></script>
   <script type="module">
-    import { Client, Account, Databases, ID } from "https://cdn.jsdelivr.net/npm/appwrite@11.0.1/dist/sdk.min.js";
+    import { Client, Account, Databases, ID, Query } from "https://cdn.jsdelivr.net/npm/appwrite@11.0.1/dist/sdk.module.js";
 
     const statusMessageEl = document.getElementById('statusMessage');
     const googleLoginBtnEl = document.getElementById('googleLoginBtn');
@@ -156,10 +155,10 @@
     const account = new Account(client);
     const databases = new Databases(client);
 
-    // Theme toggle
     const themeToggleBtnEl = document.getElementById('themeToggleBtn');
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     let currentTheme = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
+
     function applyTheme(theme) {
       if (theme === 'dark') {
         document.body.classList.add('dark-theme');
@@ -169,6 +168,7 @@
         themeToggleBtnEl.textContent = '🌙';
       }
     }
+
     applyTheme(currentTheme);
     themeToggleBtnEl.addEventListener('click', () => {
       currentTheme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
@@ -176,11 +176,9 @@
       applyTheme(currentTheme);
     });
 
-    // Enable login button
     statusMessageEl.textContent = "Please choose a username.";
     googleLoginBtnEl.disabled = false;
 
-    // Google login click handler
     googleLoginBtnEl.addEventListener('click', async () => {
       const username = usernameInputEl.value.trim();
       if (!username) {
@@ -197,7 +195,6 @@
       }
     });
 
-    // After redirect
     window.addEventListener('DOMContentLoaded', async () => {
       try {
         const session = await account.get();
@@ -214,7 +211,7 @@
         const colId = "users";
 
         const existingDoc = await databases.listDocuments(dbId, colId, [
-          appwrite.Query.equal("userId", userId)
+          Query.equal("userId", userId)
         ]);
 
         if (existingDoc.total === 0) {
